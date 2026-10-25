@@ -1,0 +1,7 @@
+node_modules
+.next
+.npm-cache
+package-lock.json
+AGENTS.md
+next-env.d.ts
+qa
