@@ -27,15 +27,15 @@ export function encodeSession(
   session: AuthSession,
   env: Record<string, string | undefined> = process.env,
 ) {
-  const policy = getDeploymentPolicy(env);
-  if (!policy.demoAuthEnabled || policy.profile === "production")
-    throw new Error("Prototype sessions are disabled in this deployment profile.");
-
   const secret = sessionSecret(env);
   if (!secret)
     throw new Error(
       "AUTH_SESSION_SECRET must be a non-default value of at least 32 characters.",
     );
+
+  const policy = getDeploymentPolicy(env);
+  if (!policy.demoAuthEnabled || policy.profile === "production")
+    throw new Error("Prototype sessions are disabled in this deployment profile.");
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
   return `${payload}.${signature(payload, secret, policy.profile)}`;
 }
