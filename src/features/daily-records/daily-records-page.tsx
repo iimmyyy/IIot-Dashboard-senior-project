@@ -130,8 +130,8 @@ export function DailyRecordsPage() {
           />
         </label>
         <div>
-          <span className="daily-label">Machine</span>
-          <div className="chamber-tabs" role="group" aria-label="Machine">
+          <span className="daily-label">Prototype selection</span>
+          <div className="chamber-tabs" role="group" aria-label="Prototype L1, L2, or L3 data selection">
             {chambers.map((item) => (
               <button
                 key={item}
@@ -219,7 +219,7 @@ export function DailyRecordsPage() {
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Machine</th>
+                  <th>Prototype selection</th>
                   {dailyFieldDefinitions.map((field) => (
                     <th key={field.key}>
                       {field.label}{field.unit ? ` ${field.unit}` : ""}

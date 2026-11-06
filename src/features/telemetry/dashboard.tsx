@@ -176,7 +176,7 @@ export function Dashboard() {
       <div className="section-heading">
         <h2>
           Live Temperature{" "}
-          <Help text="Temperatures in degrees Celsius at three heights in the selected machine. All available sensors at each height are averaged only when their readings are valid and recent." />
+          <Help text="Temperatures in degrees Celsius at three heights in the selected prototype dataset. L1/L2/L3 are not an approved hardware mapping. All available sensors at each height are averaged only when their readings are valid and recent." />
         </h2>
       </div>
       <div className="temperature-grid">
@@ -292,9 +292,9 @@ export function Dashboard() {
             </Badge>
           </div>
           <p>
-            The machine becomes ready for review when its quadratic temperature
-            fit has R² above 0.70, downward curvature, a passed fitted peak, a
-            negative latest slope, and the configured post-peak confirmation.
+            The prototype selection becomes ready for review when its quadratic
+            temperature fit has R² above 0.70, downward curvature, a passed fitted
+            peak, a negative latest slope, and the configured post-peak confirmation.
           </p>
           <div className="supporting-values">
             {peakAlert?.supporting_values.map((item) => (

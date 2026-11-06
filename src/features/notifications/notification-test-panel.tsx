@@ -19,14 +19,15 @@ type TestResult = {
   message: string;
 } | null;
 
-export function NotificationTestPanel() {
+export function NotificationTestPanel({ enabled }: { enabled: boolean }) {
   const user = useCurrentUser();
   const [sending, setSending] = useState<Channel | null>(null);
   const [results, setResults] = useState<Record<Channel, TestResult>>({
     email: null,
     line: null,
   });
-  const allowed = user.role === "researcher" || user.role === "professor";
+  const allowed =
+    enabled && (user.role === "researcher" || user.role === "professor");
 
   async function sendTest(channel: Channel) {
     setSending(channel);
@@ -102,7 +103,9 @@ export function NotificationTestPanel() {
           </h2>
           <p>Provider delivery test only. No laboratory action is triggered.</p>
         </div>
-        <Badge tone="neutral">Authorized test</Badge>
+        <Badge tone="neutral">
+          {enabled ? "Local authorized test" : "Disabled in this deployment"}
+        </Badge>
       </div>
       <div className="notification-test-grid">
         {channels.map((channel) => {
@@ -149,7 +152,9 @@ export function NotificationTestPanel() {
                   {pending ? "Sending…" : "Send test"}
                 </Button>
               ) : (
-                <Badge tone="neutral">View only</Badge>
+                <Badge tone="neutral">
+                  {enabled ? "View only" : "Unavailable"}
+                </Badge>
               )}
             </div>
           );

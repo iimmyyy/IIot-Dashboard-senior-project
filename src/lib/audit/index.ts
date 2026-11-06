@@ -3,6 +3,10 @@ import type { SessionUser } from "@/lib/auth/types";
 export type AuditAction =
   | "auth.sign_in"
   | "auth.sign_out"
+  | "notification.test_requested"
+  | "notification.test_accepted"
+  | "notification.test_failed"
+  | "notification.test_rate_limited"
   | "daily_record.created"
   | "daily_record.updated"
   | "alert.acknowledged"

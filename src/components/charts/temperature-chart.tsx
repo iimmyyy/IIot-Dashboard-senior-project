@@ -126,7 +126,7 @@ export default function TemperatureChart({
         enabled: true,
         label: {
           description:
-            "Temperature history for the top, middle and bottom of the selected machine in degrees Celsius. Times are in Bangkok. Gaps indicate missing measurements. Use the legend to show or hide a zone.",
+            "Temperature history for the top, middle and bottom of the selected prototype dataset in degrees Celsius. The L1, L2 and L3 hardware mapping is unconfirmed. Times are in Bangkok. Gaps indicate missing measurements. Use the legend to show or hide a zone.",
         },
       },
       textStyle: { fontFamily: "Arial, sans-serif", color: "#74818b" },

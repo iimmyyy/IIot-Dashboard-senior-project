@@ -2,6 +2,7 @@ import { Leaf } from "lucide-react";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/features/auth/login-form";
 import { getCurrentSession } from "@/lib/auth/dal";
+import { getDeploymentPolicy } from "@/lib/security/deployment";
 
 export const metadata = { title: "Sign in" };
 
@@ -12,6 +13,7 @@ export default async function LoginPage({
 }) {
   if (await getCurrentSession()) redirect("/dashboard");
   const { next } = await searchParams;
+  const policy = getDeploymentPolicy();
 
   return (
     <main className="login-page">
@@ -26,9 +28,18 @@ export default async function LoginPage({
         </div>
         <div className="login-heading">
           <h1 id="login-title">Sign in</h1>
-          <p>Choose an account for this monitoring session.</p>
+          <p>
+            {policy.demoAuthEnabled
+              ? "Choose an account for this demonstration session."
+              : "Access is currently unavailable."}
+          </p>
         </div>
-        <LoginForm redirectTo={next} />
+        <LoginForm
+          redirectTo={next}
+          enabled={policy.demoAuthEnabled}
+          showLocalDemoCredentials={policy.showLocalDemoCredentials}
+          message={policy.authMessage}
+        />
       </section>
     </main>
   );

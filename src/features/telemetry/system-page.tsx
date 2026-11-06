@@ -46,7 +46,11 @@ const scenarios: { value: Scenario; label: string; description: string }[] = [
     description: "Connected; no readings yet.",
   },
 ];
-export function SystemPage() {
+export function SystemPage({
+  notificationTestsEnabled = false,
+}: {
+  notificationTestsEnabled?: boolean;
+}) {
   const {
     mode,
     scenario,
@@ -249,7 +253,7 @@ export function SystemPage() {
           </div>
         </section>
       )}
-      <NotificationTestPanel />
+      <NotificationTestPanel enabled={notificationTestsEnabled} />
       <div className="card diagnostics">
         <Details title="Advanced Connection Details">
           <dl className="diagnostic-list">

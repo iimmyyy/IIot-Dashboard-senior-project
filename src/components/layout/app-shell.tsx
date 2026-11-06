@@ -144,12 +144,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <X size={18} />
             </Button>
           </div>
-          <p>Three machines, each with Top, Middle, and Bottom sensor zones.</p>
+          <p>
+            L1/L2/L3 are prototype data selections with an unconfirmed hardware
+            mapping. The verified physical system is one reactor with Top,
+            Middle, and Bottom zones and one shared blower.
+          </p>
           <ol>
             <li>
               <strong>Read the temperatures.</strong> Top, Middle, and Bottom
-              show each machine at different heights. A dash means the
-              reading is unavailable.
+              show vertical zones in the selected prototype dataset. A dash
+              means the reading is unavailable.
             </li>
             <li>
               <strong>Explore the history.</strong> Choose a time range or

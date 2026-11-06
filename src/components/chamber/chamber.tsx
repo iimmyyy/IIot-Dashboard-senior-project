@@ -12,13 +12,13 @@ export function Chamber() {
   return (
     <section className="card chamber-card">
       <div className="card-heading">
-        <h2>{frame?.chamber_id ?? "Machine"}</h2>
+        <h2>{frame?.chamber_id ?? "Prototype selection"}</h2>
         <Layers3 size={19} className="muted" />
       </div>
       <div
         className="chamber-visual"
         role="img"
-        aria-label={`${frame?.chamber_id ?? "Selected machine"} with Top, Middle and Bottom temperature sensors and a blower at the bottom. Blower status: ${blower}.`}
+        aria-label={`${frame?.chamber_id ?? "Selected prototype dataset"} with Top, Middle and Bottom temperature zones. The verified physical system has one shared blower at the bottom. Blower status: ${blower}.`}
       >
         <div className="vessel">
           <div className="vessel-top" />

@@ -106,7 +106,7 @@ export function TrendPanel({
         <div>
           <h2>
             Temperature Trends{" "}
-            <Help text="Actual recorded temperatures at each height in the selected machine. Missing data stays visible as gaps. Drag the lower chart handles to zoom." />
+            <Help text="Temperatures at each height in the selected prototype dataset. The L1/L2/L3 hardware mapping is not yet confirmed. Missing data stays visible as gaps. Drag the lower chart handles to zoom." />
           </h2>
           {full && custom && applied && (
             <p>
