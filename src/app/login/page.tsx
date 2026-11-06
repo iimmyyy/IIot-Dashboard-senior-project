@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/features/auth/login-form";
 import { getCurrentSession } from "@/lib/auth/dal";
 import { getDeploymentPolicy } from "@/lib/security/deployment";
+import { backendAuthEnabled } from "@/lib/api/backend-auth";
 
 export const metadata = { title: "Sign in" };
 
@@ -14,6 +15,7 @@ export default async function LoginPage({
   if (await getCurrentSession()) redirect("/dashboard");
   const { next } = await searchParams;
   const policy = getDeploymentPolicy();
+  const databaseAuth = backendAuthEnabled();
 
   return (
     <main className="login-page">
@@ -29,16 +31,23 @@ export default async function LoginPage({
         <div className="login-heading">
           <h1 id="login-title">Sign in</h1>
           <p>
-            {policy.demoAuthEnabled
-              ? "Choose an account for this demonstration session."
-              : "Access is currently unavailable."}
+            {databaseAuth
+              ? "Use your BioDry research account."
+              : policy.demoAuthEnabled
+                ? "Choose an account for this demonstration session."
+                : "Access is currently unavailable."}
           </p>
         </div>
         <LoginForm
           redirectTo={next}
-          enabled={policy.demoAuthEnabled}
+          enabled={databaseAuth || policy.demoAuthEnabled}
+          databaseAuth={databaseAuth}
           showLocalDemoCredentials={policy.showLocalDemoCredentials}
-          message={policy.authMessage}
+          message={
+            databaseAuth
+              ? "Accounts are created through the local administration command."
+              : policy.authMessage
+          }
         />
       </section>
     </main>

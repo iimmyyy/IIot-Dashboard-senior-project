@@ -1,0 +1,15 @@
+.git
+.github
+.next
+.npm-cache
+backend/.pytest_cache
+backend/.ruff_cache
+backend/.venv
+backend/__pycache__
+node_modules
+qa
+output
+*.tsbuildinfo
+.env*
+!.env.example
+
