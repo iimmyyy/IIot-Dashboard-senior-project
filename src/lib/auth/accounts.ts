@@ -1,7 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import type { SessionUser } from "@/lib/auth/types";
+import { demoPasswordForEnvironment } from "@/lib/security/deployment";
 
-type DemoAccount = SessionUser & { password: string };
+type DemoAccount = SessionUser;
 
 const demoAccounts: DemoAccount[] = [
   {
@@ -9,21 +10,18 @@ const demoAccounts: DemoAccount[] = [
     username: "professor",
     displayName: "Professor Demo",
     role: "professor",
-    password: "demo2026",
   },
   {
     id: "USR-RES-001",
     username: "researcher",
     displayName: "Researcher Demo",
     role: "researcher",
-    password: "demo2026",
   },
   {
     id: "USR-STAFF-001",
     username: "staff",
     displayName: "Staff Demo",
     role: "staff",
-    password: "demo2026",
   },
 ];
 
@@ -39,11 +37,14 @@ function equal(value: string, expected: string) {
 export function authenticateDemoAccount(
   username: string,
   password: string,
+  env: Record<string, string | undefined> = process.env,
 ): SessionUser | null {
+  const expectedPassword = demoPasswordForEnvironment(env);
+  if (!expectedPassword) return null;
   const account = demoAccounts.find(
     (candidate) => candidate.username === username.trim().toLowerCase(),
   );
-  if (!account || !equal(password, account.password)) return null;
+  if (!account || !equal(password, expectedPassword)) return null;
 
   return {
     id: account.id,

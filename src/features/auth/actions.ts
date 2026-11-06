@@ -1,14 +1,17 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { z } from "zod";
 import { authenticateDemoAccount } from "@/lib/auth/accounts";
-import {
-  createSession,
-  deleteSession,
-  readSession,
-} from "@/lib/auth/session";
+import { createSession, deleteSession, readSession } from "@/lib/auth/session";
 import { recordAuditEvent } from "@/lib/audit";
+import { getDeploymentPolicy } from "@/lib/security/deployment";
+import {
+  clearRateLimit,
+  clientAddress,
+  takeRateLimit,
+} from "@/lib/security/rate-limit";
 
 export type LoginState = { error?: string } | undefined;
 
@@ -28,6 +31,9 @@ export async function login(
   _state: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
+  const policy = getDeploymentPolicy();
+  if (!policy.demoAuthEnabled) return { error: policy.authMessage };
+
   const fields = loginSchema.safeParse({
     username: formData.get("username"),
     password: formData.get("password"),
@@ -35,13 +41,38 @@ export async function login(
   });
   if (!fields.success) return { error: "Enter your username and password." };
 
+  const requestHeaders = await headers();
+  const limitKey = `login:${clientAddress(requestHeaders)}:${fields.data.username.toLowerCase()}`;
+  const rateLimit = takeRateLimit(limitKey, {
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!rateLimit.allowed) {
+    console.warn("[security]", {
+      action: "auth.rate_limited",
+      username: fields.data.username.toLowerCase(),
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+    });
+    return {
+      error: `Too many sign-in attempts. Try again in ${Math.ceil(rateLimit.retryAfterSeconds / 60)} minutes.`,
+    };
+  }
+
   const user = authenticateDemoAccount(
     fields.data.username,
     fields.data.password,
   );
   if (!user) return { error: "Username or password is incorrect." };
 
-  await createSession(user);
+  try {
+    await createSession(user);
+  } catch {
+    return {
+      error:
+        "Sign-in is unavailable because the session security settings are incomplete.",
+    };
+  }
+  clearRateLimit(limitKey);
   recordAuditEvent(user, "auth.sign_in");
   redirect(safeRedirect(fields.data.redirectTo));
 }

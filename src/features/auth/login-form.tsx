@@ -10,15 +10,36 @@ const demoUsers = [
   { username: "staff", label: "Staff" },
 ];
 
-export function LoginForm({ redirectTo }: { redirectTo?: string }) {
+export function LoginForm({
+  redirectTo,
+  enabled,
+  showLocalDemoCredentials,
+  message,
+}: {
+  redirectTo?: string;
+  enabled: boolean;
+  showLocalDemoCredentials: boolean;
+  message: string;
+}) {
   const [state, action, pending] = useActionState(login, undefined);
-  const [username, setUsername] = useState("researcher");
-  const [password, setPassword] = useState("demo2026");
+  const [username, setUsername] = useState(
+    showLocalDemoCredentials ? "researcher" : "",
+  );
+  const [password, setPassword] = useState(
+    showLocalDemoCredentials ? "demo2026" : "",
+  );
+
+  if (!enabled)
+    return (
+      <div className="login-error" role="alert">
+        {message}
+      </div>
+    );
 
   return (
     <form action={action} className="login-form">
       <input type="hidden" name="redirectTo" value={redirectTo ?? ""} />
-      <div className="demo-account-picker" aria-label="Demo accounts">
+      <div className="demo-account-picker" aria-label="Demonstration accounts">
         {demoUsers.map((user) => (
           <button
             key={user.username}
@@ -26,7 +47,7 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
             className={username === user.username ? "selected" : ""}
             onClick={() => {
               setUsername(user.username);
-              setPassword("demo2026");
+              if (showLocalDemoCredentials) setPassword("demo2026");
             }}
           >
             {user.label}
@@ -66,7 +87,9 @@ export function LoginForm({ redirectTo }: { redirectTo?: string }) {
         {pending ? "Signing in..." : "Sign in"}
         {!pending && <ArrowRight size={17} aria-hidden="true" />}
       </button>
-      <p className="demo-login-note">Demo password: demo2026</p>
+      <p className="demo-login-note">
+        {showLocalDemoCredentials ? "Local demo password: demo2026" : message}
+      </p>
     </form>
   );
 }

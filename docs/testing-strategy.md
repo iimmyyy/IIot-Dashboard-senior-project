@@ -7,7 +7,9 @@ The test pyramid keeps fast research-rule and data-contract feedback on every ch
 Run with `npm test`. Unit tests cover:
 
 - Zod input contracts and unit/range validation.
-- Role permissions (`researcher` writes; `professor` and `staff` read).
+- Current prototype role permissions (`researcher` writes; `professor` and `staff` read), explicitly treated as unapproved pending the professor matrix.
+- Deployment-profile fail-closed behavior, rejection of known/default secrets, and public-demo password requirements.
+- Prototype login and notification-test rate-limit primitives and same-origin checks.
 - Daily-record uniqueness and field-level change calculation.
 - Polynomial peak and Criterion T calculations.
 - Notification outbox idempotency keys and message formatting.
@@ -16,7 +18,7 @@ Run with `npm test`. Unit tests cover:
 
 These tests do not access a network, email provider or LINE.
 
-Manual delivery tests use the authenticated `POST /api/notifications/test` route only when `NOTIFICATION_TEST_ENABLED=true`. The destination comes from server environment variables and cannot be supplied in the request body. Never enable this route in CI or point automated tests at real providers.
+Manual delivery tests use the authenticated `POST /api/notifications/test` route only in `local-demo` when `NOTIFICATION_TEST_ENABLED=true`. The destination comes from server environment variables and cannot be supplied in the request body. The route is unavailable in `public-demo` and `production`. Never enable it in CI or point automated tests at real providers.
 
 ## Integration tests
 
@@ -35,9 +37,9 @@ When FastAPI and a database are added, move persistence integration tests to an 
 Add Playwright when the persistent backend contract is available. The first browser suite should cover:
 
 1. Unauthenticated users are redirected to sign-in.
-2. Researcher signs in, creates L1/L2/L3 daily records, reloads and edits one value.
-3. Switching L1/L2/L3 on Overview changes latest telemetry, history and machine-scoped alerts without mixing data.
-4. Professor and Staff can view the same records but cannot see or call daily-record write actions.
+2. Local demo credentials work only in local-demo; public-demo requires its deployment password; production rejects prototype authentication.
+3. The current unresolved L1/L2/L3 prototype selections keep simulated caches separate without claiming a physical mapping.
+4. Current role controls match the documented prototype limitations. Add the Staff-entry/Researcher-validation/Professor-certification cases only after the professor approves the matrix and backend enforcement exists.
 5. Only Temperature Peak Passed appears as a graph marker; connection and system alerts remain in the alert list only.
 6. A peak-passed batch becomes Ready for Review, opens an in-page confirmation dialog, can be completed by Researcher or Professor, and writes one audit event even after a repeated request.
 7. A completed machine starts the next numbered batch, returns to Running, and ignores all peak alerts detected before the new start time.

@@ -242,10 +242,10 @@ export function BatchStatusCard() {
               <>
                 <p>
                   The polynomial temperature peak criterion has passed. Confirm
-                  only after reviewing the measurements for this machine.
+                  only after reviewing the measurements for this prototype selection.
                 </p>
                 <dl className="batch-modal-summary">
-                  <div><dt>Machine</dt><dd>{selectedChamber}</dd></div>
+                  <div><dt>Prototype selection</dt><dd>{selectedChamber}</dd></div>
                   <div><dt>Criterion</dt><dd>Temperature peak passed</dd></div>
                   <div><dt>Confirmed by</dt><dd>{user.displayName}</dd></div>
                 </dl>
@@ -262,7 +262,7 @@ export function BatchStatusCard() {
                 </p>
                 <dl className="batch-modal-summary">
                   <div><dt>New batch</dt><dd>Batch {currentRun.sequence + 1}</dd></div>
-                  <div><dt>Machine</dt><dd>{selectedChamber}</dd></div>
+                  <div><dt>Prototype selection</dt><dd>{selectedChamber}</dd></div>
                   <div><dt>Started by</dt><dd>{user.displayName}</dd></div>
                 </dl>
               </>
