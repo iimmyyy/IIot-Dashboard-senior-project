@@ -14,7 +14,12 @@ import {
 } from "@tanstack/react-query";
 import { api, mode } from "@/lib/api/client";
 import { connectTelemetry, isNewerTelemetry } from "@/lib/websocket/telemetry";
-import { type Connection, type Scenario, type Telemetry } from "@/types";
+import {
+  type Chamber,
+  type Connection,
+  type Scenario,
+  type Telemetry,
+} from "@/types";
 import {
   STALE_MS,
   zoneCondition,
@@ -24,6 +29,7 @@ import {
 function useMonitorState() {
   const client = useQueryClient();
   const [scenario, setScenario] = useState<Scenario>("normal");
+  const [selectedChamber, setSelectedChamber] = useState<Chamber>("L1");
   const [now, setNow] = useState<number | null>(null);
   const [connection, setConnection] = useState<Connection>(
     mode === "demo" ? "connected" : "connecting",
@@ -41,12 +47,13 @@ function useMonitorState() {
     refetchInterval: 60000,
   });
   const latest = useQuery({
-    queryKey: ["latest", scenario],
+    queryKey: ["latest", scenario, selectedChamber],
     queryFn: async () => {
-      const next = await api.latest(scenario);
+      const next = await api.latest(scenario, selectedChamber);
       const current = client.getQueryData<Telemetry | null>([
         "latest",
         scenario,
+        selectedChamber,
       ]);
       if (next && Date.parse(next.timestamp) > Date.now() + 30000)
         throw new Error(
@@ -74,7 +81,7 @@ function useMonitorState() {
       url,
       (frame) => {
         client.setQueryData<Telemetry | null>(
-          ["latest", "normal"],
+          ["latest", "normal", frame.chamber_id],
           (current) => (isNewerTelemetry(current, frame) ? frame : current),
         );
       },
@@ -87,6 +94,7 @@ function useMonitorState() {
   );
   const frame =
     latest.data && latest.data.experiment_id === currentExperiment?.id
+        && latest.data.chamber_id === selectedChamber
       ? latest.data
       : undefined;
   const effectiveConnection =
@@ -131,6 +139,8 @@ function useMonitorState() {
   return {
     scenario,
     setScenario,
+    selectedChamber,
+    setSelectedChamber,
     now,
     connection: effectiveConnection,
     invalidFrames,
@@ -178,9 +188,10 @@ export function useMonitor() {
   return value;
 }
 export function useHistory(id: string | undefined, start: number, end: number) {
+  const { selectedChamber } = useMonitor();
   return useQuery({
-    queryKey: ["history", id, start, end],
-    queryFn: () => api.history(id!, start, end),
+    queryKey: ["history", id, selectedChamber, start, end],
+    queryFn: () => api.history(id!, start, end, selectedChamber),
     enabled:
       !!id && Number.isFinite(start) && Number.isFinite(end) && start < end,
     refetchInterval: 30000,

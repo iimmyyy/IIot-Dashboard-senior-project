@@ -1,10 +1,9 @@
 "use client";
 import { useState } from "react";
-import { Bell, CheckCheck, ListFilter } from "lucide-react";
+import { Bell } from "lucide-react";
 import { useMonitor } from "@/hooks/use-monitor";
 import { PageHeading, Badge, EmptyState } from "@/components/ui/shared";
 import { AlertCard } from "./alert-card";
-import { dateTime } from "@/lib/utils";
 export function AlertList() {
   const { alerts } = useMonitor();
   const [status, setStatus] = useState("all");
@@ -35,9 +34,7 @@ export function AlertList() {
   return (
     <>
       <PageHeading
-        eyebrow="STAY INFORMED"
         title="Alerts"
-        description="Understand what needs attention and record your review."
       >
         <Badge tone={alerts.isError || count ? "warning" : "good"}>
           <Bell size={13} />
@@ -53,10 +50,6 @@ export function AlertList() {
         </Badge>
       </PageHeading>
       <div className="card alert-filters">
-        <span className="filter-title">
-          <ListFilter size={17} />
-          Filter Alerts
-        </span>
         <label>
           Status
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -108,19 +101,6 @@ export function AlertList() {
         ) : (
           items.map((a) => <AlertCard alert={a} key={a.id} />)
         )}
-      </div>
-      <div className="info-card">
-        <CheckCheck size={21} />
-        <div>
-          <h3>Acknowledged means read, not resolved.</h3>
-          <p>
-            Your acknowledgement records who reviewed the alert and when.
-            Resolution is a separate status provided by the data service.
-          </p>
-          {alerts.dataUpdatedAt > 0 && (
-            <small>Last checked {dateTime(alerts.dataUpdatedAt)} ICT</small>
-          )}
-        </div>
       </div>
     </>
   );

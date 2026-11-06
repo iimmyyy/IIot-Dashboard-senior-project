@@ -18,34 +18,32 @@ import { Button } from "@/components/ui/button";
 import { dateTime, positionLabels } from "@/lib/utils";
 import { positions, type Scenario } from "@/types";
 import { zoneCondition, zoneValue } from "@/features/telemetry/calculations";
+import { NotificationTestPanel } from "@/features/notifications/notification-test-panel";
 const scenarios: { value: Scenario; label: string; description: string }[] = [
   {
     value: "normal",
     label: "Normal Monitoring",
-    description: "Recent simulated measurements from all three zones.",
+    description: "All zones reporting.",
   },
   {
     value: "stale",
     label: "Outdated Readings",
-    description:
-      "Measurements are eight minutes old. Current values are hidden.",
+    description: "Latest readings are eight minutes old.",
   },
   {
     value: "missing",
     label: "Missing Middle Sensor",
-    description:
-      "The middle zone is unavailable. No substitute value is invented.",
+    description: "Middle zone unavailable.",
   },
   {
     value: "disconnected",
     label: "Connection Lost",
-    description: "Simulate a disconnected stream with outdated readings.",
+    description: "Data stream disconnected.",
   },
   {
     value: "waiting",
     label: "Waiting for Sensor Data",
-    description:
-      "The connection is available, but no measurements have arrived.",
+    description: "Connected; no readings yet.",
   },
 ];
 export function SystemPage() {
@@ -67,9 +65,7 @@ export function SystemPage() {
   return (
     <>
       <PageHeading
-        eyebrow="A RELIABLE VIEW OF YOUR DATA"
         title="System Status"
-        description="Check connections, sensor availability, and data freshness."
       >
         <Button variant="outline" size="sm" onClick={refresh}>
           <RefreshCw size={15} />
@@ -84,13 +80,6 @@ export function SystemPage() {
         </span>
         <div>
           <h2>{healthy ? "System Connected" : status}</h2>
-          <p>
-            {healthy
-              ? mode === "demo"
-                ? "Simulated monitoring is active. All three zones have recent measurements."
-                : "Monitoring is active. Review individual connections and sensor availability below."
-              : "Review the details below. Check the sensor connection or ask your system administrator for help."}
-          </p>
         </div>
         <Badge tone={healthy ? "good" : "warning"}>
           {healthy ? <Check size={13} /> : <TriangleAlert size={13} />}
@@ -230,12 +219,8 @@ export function SystemPage() {
             <div>
               <h2>
                 <FlaskConical size={19} />
-                Explore Demo Scenarios
+                Demo Scenarios
               </h2>
-              <p>
-                Try a monitoring condition, then return to Overview to see how
-                it is displayed.
-              </p>
             </div>
             <Badge tone="teal">Simulated Only</Badge>
           </div>
@@ -262,12 +247,9 @@ export function SystemPage() {
               </button>
             ))}
           </div>
-          <p className="page-note">
-            These scenarios change only simulated data in this browser session.
-            Demonstration alerts and historical records are separate fixtures.
-          </p>
         </section>
       )}
+      <NotificationTestPanel />
       <div className="card diagnostics">
         <Details title="Advanced Connection Details">
           <dl className="diagnostic-list">
@@ -323,10 +305,6 @@ export function SystemPage() {
             <p className="error-text">{system.error.message}</p>
           )}
         </Details>
-      </div>
-      <div className="monitoring-note">
-        <ShieldCheck size={16} />
-        Monitoring only. This application does not switch the blower on or off.
       </div>
     </>
   );

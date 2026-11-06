@@ -4,6 +4,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 export const TIMEZONE = "Asia/Bangkok";
+export function bangkokDate(value: string | number | Date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
 export function dateTime(
   value: string | number,
   options?: Intl.DateTimeFormatOptions,

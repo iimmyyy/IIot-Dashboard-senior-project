@@ -1,10 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "./client";
 import { telemetrySchema } from "@/types";
-import { demoAlerts, demoFrame } from "@/lib/mock/data";
+import { demoAlerts, demoExperiments, demoFrame } from "@/lib/mock/data";
 import { bangkokInput, dateTime } from "@/lib/utils";
 afterEach(() => vi.unstubAllGlobals());
 describe("contracts and acknowledgements", () => {
+  it("keeps L1, L2 and L3 telemetry separate", async () => {
+    const l1 = await api.latest("normal", "L1");
+    const l2 = await api.latest("normal", "L2");
+    expect(l1?.chamber_id).toBe("L1");
+    expect(l2?.chamber_id).toBe("L2");
+    expect(l2?.readings[0].temperature_c).not.toBe(
+      l1?.readings[0].temperature_c,
+    );
+    const history = await api.history(
+      demoExperiments[0].id,
+      Date.now() - 3_600_000,
+      Date.now(),
+      "L3",
+    );
+    expect(history.every((frame) => frame.chamber_id === "L3")).toBe(true);
+  });
   it("rejects invalid temperatures and duplicate sensor ids", () => {
     const frame = demoFrame(Date.now());
     expect(

@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import { Providers } from "@/hooks/use-monitor";
-import { AppShell } from "@/components/layout/app-shell";
 import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "BioDry · Research Monitor", template: "%s · BioDry" },
@@ -13,9 +11,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Providers>
-          <AppShell>{children}</AppShell>
-        </Providers>
+        {children}
       </body>
     </html>
   );

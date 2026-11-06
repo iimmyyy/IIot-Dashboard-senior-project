@@ -7,7 +7,7 @@ import { dateTime, duration, positionLabels } from "@/lib/utils";
 import { Badge, EmptyState, PageHeading } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 export function ExperimentList() {
-  const { experiments, now, mode } = useMonitor();
+  const { experiments, now } = useMonitor();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const items =
@@ -19,9 +19,7 @@ export function ExperimentList() {
   return (
     <>
       <PageHeading
-        eyebrow="EVERY RUN, IN ONE PLACE"
         title="Experiment History"
-        description="Review previous batches and follow your current experiment."
       >
         <Badge tone="teal">
           <FlaskConical size={13} />
@@ -83,10 +81,7 @@ export function ExperimentList() {
                     </Badge>
                   </div>
                   <h2>{exp.name}</h2>
-                  <p>
-                    {exp.conditions}
-                    {mode === "demo" ? " · Demonstration record" : ""}
-                  </p>
+                  <p>{exp.conditions}</p>
                   <div className="experiment-facts">
                     <div>
                       <span>Start Date</span>
@@ -130,10 +125,6 @@ export function ExperimentList() {
           </div>
         )}
       </div>
-      <p className="page-note">
-        Each record is a separate batch. Experimental conditions are kept
-        separate from physical sensor positions.
-      </p>
     </>
   );
 }

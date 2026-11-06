@@ -9,16 +9,8 @@ export default async function Page({
   const { experiment } = await searchParams;
   return (
     <>
-      <PageHeading
-        eyebrow="THE STORY BEHIND THE READINGS"
-        title="Temperature Trends"
-        description="Explore how temperatures change throughout an experiment."
-      />
+      <PageHeading title="Temperature Trends" />
       <TrendPanel full initialId={experiment} />
-      <p className="page-note">
-        All temperatures use Celsius (°C). Dates and times are displayed in
-        Bangkok time (ICT, UTC+7). CSV files also preserve UTC timestamps.
-      </p>
     </>
   );
 }

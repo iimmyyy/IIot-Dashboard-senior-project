@@ -1,5 +1,5 @@
 "use client";
-import { Fan, Info, Layers3 } from "lucide-react";
+import { Fan, Layers3 } from "lucide-react";
 import { zoneValue } from "@/features/telemetry/calculations";
 import { useMonitor } from "@/hooks/use-monitor";
 import { positionLabels } from "@/lib/utils";
@@ -12,16 +12,13 @@ export function Chamber() {
   return (
     <section className="card chamber-card">
       <div className="card-heading">
-        <div>
-          <h2>Inside the chamber</h2>
-          <p>One chamber. Three measurement zones.</p>
-        </div>
+        <h2>{frame?.chamber_id ?? "Machine"}</h2>
         <Layers3 size={19} className="muted" />
       </div>
       <div
         className="chamber-visual"
         role="img"
-        aria-label={`One vertical biodrying chamber with Top, Middle and Bottom temperature sensors and one shared blower at the bottom. Blower status: ${blower}.`}
+        aria-label={`${frame?.chamber_id ?? "Selected machine"} with Top, Middle and Bottom temperature sensors and a blower at the bottom. Blower status: ${blower}.`}
       >
         <div className="vessel">
           <div className="vessel-top" />
@@ -42,7 +39,7 @@ export function Chamber() {
           <div className="vessel-pipe" />
           <div className="blower">
             <Fan size={22} />
-            <span>Shared blower</span>
+            <span>Blower</span>
           </div>
           <div className="vessel-leg left" />
           <div className="vessel-leg right" />
@@ -63,13 +60,9 @@ export function Chamber() {
         </div>
       </div>
       <div className="chamber-note">
-        <Info size={15} />
-        <span>
-          {blower === "unknown"
-            ? "Blower status unavailable"
-            : `Blower reported ${blower.toUpperCase()}${mode === "demo" ? " (simulated)" : ""}`}
-          <small>Monitoring only · operated manually</small>
-        </span>
+        {blower === "unknown"
+          ? "Blower status unavailable"
+          : `Blower ${blower.toUpperCase()}${mode === "demo" ? " · demo" : ""}`}
       </div>
     </section>
   );

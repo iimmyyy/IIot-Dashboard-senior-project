@@ -9,7 +9,6 @@ import {
   Circle,
   Clock3,
   FlaskConical,
-  Info,
   Minus,
   Radio,
   RefreshCw,
@@ -25,7 +24,6 @@ import {
   zoneValue,
   zoneCondition,
 } from "@/features/telemetry/calculations";
-import { defaultRule, evaluateCriterionT } from "@/features/rules/criterion";
 import { positions } from "@/types";
 import {
   Badge,
@@ -36,8 +34,12 @@ import {
 } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Chamber } from "@/components/chamber/chamber";
+import { ChamberSelector } from "@/components/chamber/chamber-selector";
 import { TrendPanel } from "@/components/charts/trend-panel";
 import { AlertCard } from "@/features/alerts/alert-card";
+import { BatchStatusCard } from "@/features/experiments/batch-status";
+import { alertBelongsToBatch } from "@/features/experiments/batch-lifecycle";
+import { useCurrentBatchRun } from "@/features/experiments/use-current-batch-run";
 
 export function Dashboard() {
   const {
@@ -46,36 +48,43 @@ export function Dashboard() {
     frame,
     status,
     stale,
-    mode,
     alerts,
+    selectedChamber,
     latest,
     experiments,
     refresh,
-    connection,
   } = useMonitor();
+  const currentBatchRun = useCurrentBatchRun();
   const end = now ? Math.floor(now / 60000) * 60000 : 0;
-  const history = useHistory(experiment?.id, end - 3 * 86400000, end);
+  const history = useHistory(
+    experiment?.id,
+    Math.max(end - 3 * 86400000, Date.parse(currentBatchRun.started_at)),
+    end,
+  );
   const frames = history.isError ? [] : (history.data ?? []);
   const average = averageTemperature(frame, now ?? 0);
   const activeAlerts =
     alerts.data?.filter(
       (a) => !a.resolved_at && a.experiment_id === experiment?.id,
+    ).filter(
+      (alert) => !alert.chamber_id || alert.chamber_id === selectedChamber,
     ) ?? [];
   const primaryAlert =
     activeAlerts.find((a) => !a.acknowledged_at) ?? activeAlerts[0];
   const healthy = status === "Monitoring Active";
-  const rule = evaluateCriterionT(
-    frames,
-    experiment?.start_date ?? "",
-    now ?? 0,
+  const peakAlert = alerts.data?.find(
+    (alert) =>
+      alert.kind === "temperature_peak" &&
+      alert.experiment_id === experiment?.id &&
+      alert.chamber_id === selectedChamber &&
+      alertBelongsToBatch(alert.detected_at, currentBatchRun),
   );
   return (
     <>
       <PageHeading
-        eyebrow="YOUR LAB, AT A GLANCE"
         title="Overview"
-        description="A clear view of your chamber. Confidence in your next step."
       >
+        <ChamberSelector />
         <Badge tone={healthy ? "good" : "warning"}>
           {healthy ? <Radio size={13} /> : <TriangleAlert size={13} />}
           {status}
@@ -119,7 +128,6 @@ export function Dashboard() {
             <FlaskConical size={22} />
           </span>
           <div>
-            <span className="overline">CURRENT EXPERIMENT</span>
             <h2>
               {experiment?.name ??
                 (experiments.isPending
@@ -128,7 +136,6 @@ export function Dashboard() {
             </h2>
             <span className="experiment-id">
               {experiment?.id ?? "Waiting for experiment details"}
-              <span>·</span>Single chamber study
             </span>
           </div>
         </div>
@@ -165,33 +172,17 @@ export function Dashboard() {
           </Link>
         </div>
       </section>
+      <BatchStatusCard />
       <div className="section-heading">
         <h2>
           Live Temperature{" "}
-          <Help text="Temperatures in degrees Celsius at three heights in one chamber. All available sensors at each height are averaged only when their readings are valid and recent." />
+          <Help text="Temperatures in degrees Celsius at three heights in the selected machine. All available sensors at each height are averaged only when their readings are valid and recent." />
         </h2>
-        <span>
-          {mode === "demo"
-            ? "Simulated readings"
-            : connection === "connected"
-              ? "System Connected"
-              : "Connection Interrupted"}
-          <span className={cn("dot", healthy ? "good-dot" : "warning-dot")} />
-        </span>
       </div>
       <div className="temperature-grid">
         {positions.map((p) => {
           const value = zoneValue(frame, p, now ?? 0);
           const condition = zoneCondition(frame, p, now ?? 0);
-          const sensorTimes =
-            frame?.readings
-              .filter((reading) => reading.position === p)
-              .map((reading) =>
-                Date.parse(reading.timestamp ?? frame.timestamp),
-              ) ?? [];
-          const measuredAt = sensorTimes.length
-            ? new Date(Math.min(...sensorTimes)).toISOString()
-            : undefined;
           const direction = value === null ? "Unavailable" : trend(frames, p);
           const TrendIcon =
             direction === "Falling"
@@ -240,11 +231,6 @@ export function Dashboard() {
                     : "Sensor healthy"}
                 </span>
               </div>
-              <div className="temp-timestamp">
-                {measuredAt && now
-                  ? `Measured ${age(measuredAt, now)}`
-                  : "Waiting for Sensor Data"}
-              </div>
             </section>
           );
         })}
@@ -256,7 +242,6 @@ export function Dashboard() {
           <Help text="Equal average of the three zone temperatures. Each zone is averaged from its valid sensors. Unavailable when any required zone has missing, invalid, or outdated measurements." />
           <b>{average === null ? "—" : `${average.toFixed(1)} °C`}</b>
         </span>
-        <span>Top, Middle, and Bottom are zones in one connected chamber.</span>
       </div>
       <div className="dashboard-visual-grid">
         <TrendPanel />
@@ -299,50 +284,36 @@ export function Dashboard() {
         </div>
       )}
       <div className="research-details">
-        <Details title="Research Criteria & Supporting Calculations">
+        <Details title="Batch Completion Criterion">
           <div className="rule-heading">
-            <h3>Temperature Criterion T</h3>
-            <Badge>
-              {rule.state === "unavailable"
-                ? "Awaiting Method Confirmation"
-                : rule.state.replaceAll("_", " ")}
+            <h3>Polynomial Temperature Peak · {selectedChamber}</h3>
+            <Badge tone={peakAlert ? "warning" : "neutral"}>
+              {peakAlert ? "Peak Passed" : "Monitoring"}
             </Badge>
           </div>
-          <p>{rule.explanation}</p>
+          <p>
+            The machine becomes ready for review when its quadratic temperature
+            fit has R² above 0.70, downward curvature, a passed fitted peak, a
+            negative latest slope, and the configured post-peak confirmation.
+          </p>
           <div className="supporting-values">
-            <div>
-              <span>Core temperature average</span>
-              <strong>{defaultRule.windowDays} days</strong>
-            </div>
-            <div>
-              <span>Required drop from reference peak</span>
-              <strong>At least {defaultRule.dropC} °C</strong>
-            </div>
-            <div>
-              <span>Bottom temperature trend limit</span>
-              <strong>≤ {defaultRule.maxBottomSlopeCPerDay} °C/day</strong>
-            </div>
+            {peakAlert?.supporting_values.map((item) => (
+              <div key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            )) ?? (
+              <div>
+                <span>Fit quality threshold</span>
+                <strong>R² &gt; 0.70</strong>
+              </div>
+            )}
           </div>
           <p>
-            <strong>Additional measurements required.</strong> Drying Rate (D)
-            and Air Utilization (E) cannot be evaluated using temperature
-            sensors alone. The research stopping rule requires T, D, and E for
-            two consecutive days, beginning on day 7. The responsible researcher
-            makes operational decisions.
-          </p>
-          <p>
-            Core sensor mapping, the relevant reference peak, sampling
-            requirements, and the calculation method must be approved before
-            enabling this configurable research rule.
+            T, D and E are not part of the current prototype completion rule.
+            A Researcher or Professor must confirm completion manually.
           </p>
         </Details>
-      </div>
-      <div className="monitoring-note">
-        <Info size={15} />
-        <span>
-          A little context: this workspace monitors your experiment and supports
-          review. Blower operation remains with the laboratory team.
-        </span>
       </div>
     </>
   );

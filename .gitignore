@@ -7,3 +7,5 @@ out/
 *.tsbuildinfo
 coverage/
 qa/
+output/
+.vercel

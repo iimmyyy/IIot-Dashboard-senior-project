@@ -1,6 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowUpRight, Download } from "lucide-react";
 import Link from "next/link";
 import { useHistory, useMonitor } from "@/hooks/use-monitor";
@@ -10,6 +10,7 @@ import { sensorStats } from "@/features/telemetry/calculations";
 import { telemetryCsv } from "@/features/telemetry/export";
 import { Button } from "@/components/ui/button";
 import { Details, EmptyState, Help } from "@/components/ui/shared";
+import { useCurrentBatchRun } from "@/features/experiments/use-current-batch-run";
 const Chart = dynamic(() => import("./temperature-chart"), {
   ssr: false,
   loading: () => (
@@ -30,7 +31,15 @@ export function TrendPanel({
   full?: boolean;
   initialId?: string;
 }) {
-  const { currentExperiment, experiments, now, mode } = useMonitor();
+  const {
+    currentExperiment,
+    experiments,
+    alerts,
+    now,
+    mode,
+    selectedChamber,
+  } = useMonitor();
+  const currentBatchRun = useCurrentBatchRun();
   const [range, setRange] = useState(24);
   const [selected, setSelected] = useState("");
   const [custom, setCustom] = useState(false);
@@ -54,9 +63,27 @@ export function TrendPanel({
       ? Math.floor(now / 60000) * 60000
       : 0;
   const queryEnd = custom && applied ? applied.end : end;
-  const queryStart = custom && applied ? applied.start : end - range * 3600000;
+  const requestedStart = custom && applied ? applied.start : end - range * 3600000;
+  const queryStart =
+    id === currentExperiment?.id
+      ? Math.max(requestedStart, Date.parse(currentBatchRun.started_at))
+      : requestedStart;
   const history = useHistory(id, queryStart, queryEnd);
-  const frames = history.data ?? [];
+  const frames = useMemo(() => history.data ?? [], [history.data]);
+  const chartAlerts = useMemo(
+    () =>
+      alerts.data?.filter((alert) => {
+        const detectedAt = Date.parse(alert.detected_at);
+        const chamberId = frames[0]?.chamber_id;
+        return (
+          alert.experiment_id === id &&
+          (!alert.chamber_id || !chamberId || alert.chamber_id === chamberId) &&
+          detectedAt >= queryStart &&
+          detectedAt <= queryEnd
+        );
+      }) ?? [],
+    [alerts.data, frames, id, queryEnd, queryStart],
+  );
   const exportCsv = () => {
     const csv = telemetryCsv(frames, mode);
     const url = URL.createObjectURL(
@@ -64,7 +91,7 @@ export function TrendPanel({
     );
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${mode}-${id}-temperatures.csv`;
+    link.download = `${mode}-${id}-${selectedChamber}-temperatures.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -79,14 +106,13 @@ export function TrendPanel({
         <div>
           <h2>
             Temperature Trends{" "}
-            <Help text="Actual recorded temperatures at each height in one chamber. Missing data stays visible as gaps. Drag the lower chart handles to zoom." />
+            <Help text="Actual recorded temperatures at each height in the selected machine. Missing data stays visible as gaps. Drag the lower chart handles to zoom." />
           </h2>
-          <p>
-            {custom && applied
-              ? `${dateTime(applied.start)} – ${dateTime(applied.end)} ICT`
-              : `Across the chamber · ${range === 168 ? "last 7 days" : `last ${range} hours`}`}{" "}
-            {mode === "demo" && "· simulated"}
-          </p>
+          {full && custom && applied && (
+            <p>
+              {dateTime(applied.start)} – {dateTime(applied.end)} ICT
+            </p>
+          )}
         </div>
         {full ? (
           <Button
@@ -222,7 +248,12 @@ export function TrendPanel({
       ) : (
         <>
           {visible.length ? (
-            <Chart history={frames} large={full} visible={visible} />
+            <Chart
+              history={frames}
+              alerts={chartAlerts}
+              large={full}
+              visible={visible}
+            />
           ) : (
             <div className="chart-loading">
               Select a measurement zone below to view its history.
@@ -251,14 +282,20 @@ export function TrendPanel({
                 <span className="sr-only"> Temperature</span>
               </button>
             ))}
+            {chartAlerts.length > 0 && (
+              <span className="chart-alert-key">
+                <i /> Alerts
+              </span>
+            )}
           </div>
         </>
       )}
-      <div className="chart-footnote">
-        <span className="dot muted-dot" />
-        Gaps indicate missing measurements.
-        <span>Drag to zoom · select a legend to hide a zone</span>
-      </div>
+      {full && (
+        <div className="chart-footnote">
+          <span className="dot muted-dot" />
+          Gaps indicate missing measurements.
+        </div>
+      )}
       {exportMessage && (
         <p className="inline-feedback" role="status">
           {exportMessage}
@@ -308,15 +345,8 @@ export function TrendPanel({
           </div>
           <Details title="Advanced Analysis">
             <p>
-              The summary uses available valid measurements. Averages are sample
-              means; values are not interpolated across missing data. Change
-              compares the first and last measurements in the selected period
-              and is unavailable if either is missing.
-            </p>
-            <p>
-              Criterion T requires a validated method and complete three-day
-              data. A temperature index is unavailable until its calculation is
-              defined by the research team.
+              Values use valid measurements only. Missing data is not
+              interpolated.
             </p>
             <Details title="Accessible measurement table">
               <div className="table-scroll accessible-data">

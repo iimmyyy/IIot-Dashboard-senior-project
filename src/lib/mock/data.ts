@@ -1,4 +1,15 @@
-import type { Experiment, ResearchAlert, Scenario, Telemetry } from "@/types";
+import {
+  chambers,
+  type Chamber,
+  type Experiment,
+  type ResearchAlert,
+  type Scenario,
+  type Telemetry,
+} from "@/types";
+import {
+  defaultPolynomialPeakConfig,
+  evaluatePolynomialPeak,
+} from "@/features/rules/polynomial-peak";
 
 export const DEMO_ANCHOR = Math.floor(Date.now() / 60000) * 60000;
 const day = 86400000;
@@ -44,6 +55,7 @@ export const demoExperiments: Experiment[] = [
 export function demoFrame(
   timestamp: number,
   experimentId = demoExperiments[0].id,
+  chamberId: Chamber = "L1",
 ): Telemetry {
   const exp =
     demoExperiments.find((e) => e.id === experimentId) ?? demoExperiments[0];
@@ -53,23 +65,33 @@ export function demoFrame(
     daysBeforeEnd < 5
       ? daysBeforeEnd * 2.05
       : Math.max(-16, 10.25 - (daysBeforeEnd - 5) * 6.1);
-  const wiggle = Math.sin(((timestamp - DEMO_ANCHOR) / 3600000) * 0.65) * 0.32;
+  const chamberIndex = chambers.indexOf(chamberId);
+  const chamberOffset = [0, 1.3, -1.1][chamberIndex];
+  const wiggle =
+    Math.sin(
+      ((timestamp - DEMO_ANCHOR) / 3600000) * 0.65 + chamberIndex * 0.7,
+    ) * 0.32;
   return {
     experiment_id: experimentId,
-    chamber_id: "CHAMBER-01",
+    chamber_id: chamberId,
     timestamp: iso(timestamp),
     readings: (["top", "middle", "bottom"] as const).map((position, i) => ({
-      sensor_id: `TEMP-${position.toUpperCase()}-01`,
+      sensor_id: `TEMP-${chamberId}-${position.toUpperCase()}-01`,
       position,
       temperature_c:
         Math.round(
-          ([48.6, 52.3, 45.8][i] + drift + wiggle * [1, 0.7, 0.8][i]) * 10,
+          ([48.6, 52.3, 45.8][i] + chamberOffset + drift + wiggle * [1, 0.7, 0.8][i]) * 10,
         ) / 10,
       quality: "good",
     })),
   };
 }
-export function demoHistory(id: string, start: number, end: number) {
+export function demoHistory(
+  id: string,
+  start: number,
+  end: number,
+  chamberId: Chamber = "L1",
+) {
   const exp = demoExperiments.find((e) => e.id === id);
   if (!exp) return [];
   const low = Math.max(start, Date.parse(exp.start_date));
@@ -85,9 +107,9 @@ export function demoHistory(id: string, start: number, end: number) {
         : 3600000;
   const frames: Telemetry[] = [];
   for (let time = low; time <= high; time += step)
-    frames.push(demoFrame(time, id));
+    frames.push(demoFrame(time, id, chamberId));
   if (!frames.length || Date.parse(frames.at(-1)!.timestamp) < high)
-    frames.push(demoFrame(high, id));
+    frames.push(demoFrame(high, id, chamberId));
   // An explicit short measurement gap demonstrates honest chart rendering.
   return frames.map((f, i) =>
     frames.length > 40 && i === Math.floor(frames.length * 0.35)
@@ -102,40 +124,78 @@ export function demoHistory(id: string, start: number, end: number) {
       : f,
   );
 }
-export function demoLatest(scenario: Scenario): Telemetry | null {
+export function demoLatest(
+  scenario: Scenario,
+  chamberId: Chamber = "L1",
+): Telemetry | null {
   if (scenario === "waiting") return null;
   const frame = demoFrame(
     Date.now() -
       (scenario === "stale" || scenario === "disconnected" ? 8 * 60000 : 0),
+    demoExperiments[0].id,
+    chamberId,
   );
   if (scenario === "missing")
     frame.readings = frame.readings.filter((r) => r.position !== "middle");
   return frame;
 }
 export function demoAlerts(): ResearchAlert[] {
+  const experiment = demoExperiments[0];
+  const peakAlert: ResearchAlert[] = chambers.flatMap((chamberId, index) => {
+    const peak = evaluatePolynomialPeak(
+      demoHistory(
+        experiment.id,
+        DEMO_ANCHOR - defaultPolynomialPeakConfig.windowHours * 3_600_000,
+        DEMO_ANCHOR,
+        chamberId,
+      ),
+    );
+    return peak.state === "alert"
+      ? [
+          {
+            id: index === 0 ? "ALT-POLY-0082" : `ALT-POLY-0082-${chamberId}`,
+            experiment_id: experiment.id,
+            chamber_id: chamberId,
+            kind: "temperature_peak" as const,
+            title: "Temperature peak passed",
+            description:
+              "A quadratic fit of the chamber average indicates that the temperature has passed its peak and is falling.",
+            action:
+              "Review the temperature trend with the experiment measurements.",
+            severity: "warning" as const,
+            detected_at: peak.peakAt!,
+            supporting_values: [
+              {
+                label: "Fit quality",
+                value: `R² ${peak.rSquared!.toFixed(2)}`,
+              },
+              {
+                label: "Peak detected",
+                value: `${((DEMO_ANCHOR - Date.parse(peak.peakAt!)) / day).toFixed(1)} days ago`,
+              },
+              {
+                label: "Latest fitted slope",
+                value: `${peak.latestSlopeCPerHour!.toFixed(2)} °C/hour`,
+              },
+              {
+                label: "Drop from fitted peak",
+                value: `${peak.dropFromPeakC!.toFixed(1)} °C`,
+              },
+            ],
+            acknowledged_at: null,
+            acknowledged_by: null,
+            resolved_at: null,
+          },
+        ]
+      : [];
+  });
   return [
-    {
-      id: "ALT-0082",
-      experiment_id: demoExperiments[0].id,
-      title: "Temperature Trend Alert",
-      description:
-        "Temperatures in all three zones are falling in this demonstration. Review the recent temperature history alongside other experiment measurements.",
-      action:
-        "Review the experiment data and consult the responsible researcher.",
-      severity: "warning",
-      detected_at: iso(DEMO_ANCHOR - 18 * 60000),
-      supporting_values: [
-        { label: "Period reviewed", value: "Last 6 hours" },
-        { label: "Trend", value: "Falling in all three zones" },
-        { label: "Data source", value: "Simulated measurements" },
-      ],
-      acknowledged_at: null,
-      acknowledged_by: null,
-      resolved_at: null,
-    },
+    ...peakAlert,
     {
       id: "ALT-0081",
       experiment_id: demoExperiments[0].id,
+      chamber_id: "L1",
+      kind: "connection",
       title: "Monitoring resumed",
       description:
         "Simulated measurements are being received again after a brief interruption.",

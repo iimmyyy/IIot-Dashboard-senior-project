@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { init, use as registerECharts } from "echarts/core";
-import { LineChart } from "echarts/charts";
+import { LineChart, ScatterChart } from "echarts/charts";
 import {
   GridComponent,
   TooltipComponent,
@@ -12,9 +12,16 @@ import {
 import { CanvasRenderer } from "echarts/renderers";
 import { dateTime, positionLabels, sensorColors, timeOnly } from "@/lib/utils";
 import { zoneValue } from "@/features/telemetry/calculations";
-import { positions, type Position, type Telemetry } from "@/types";
+import { isGraphAlert } from "@/features/alerts/graph-alerts";
+import {
+  positions,
+  type Position,
+  type ResearchAlert,
+  type Telemetry,
+} from "@/types";
 registerECharts([
   LineChart,
+  ScatterChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
@@ -25,16 +32,23 @@ registerECharts([
 
 export default function TemperatureChart({
   history,
+  alerts = [],
   large = false,
   visible = [...positions],
 }: {
   history: Telemetry[];
+  alerts?: ResearchAlert[];
   large?: boolean;
   visible?: Position[];
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const chartInput = useMemo(
+    () => ({ alerts, history, large }),
+    [alerts, history, large],
+  );
   useEffect(() => {
     if (!ref.current) return;
+    const { alerts, history, large } = chartInput;
     const chart = init(ref.current, undefined, { renderer: "canvas" });
     // Explicit null points keep interrupted sampling visible, including absent frames.
     const deltas = history
@@ -69,6 +83,42 @@ export default function TemperatureChart({
         });
       display.push(frame);
     });
+    const alertColors: Record<ResearchAlert["severity"], string> = {
+      info: "#5f8fa2",
+      warning: "#c18a32",
+      critical: "#c45e5e",
+    };
+    const alertPoints = alerts
+      .filter(isGraphAlert)
+      .flatMap((alert) => {
+      const detectedAt = Date.parse(alert.detected_at);
+      if (!Number.isFinite(detectedAt) || !history.length) return [];
+      const closest = history.reduce((best, frame) =>
+        Math.abs(Date.parse(frame.timestamp) - detectedAt) <
+        Math.abs(Date.parse(best.timestamp) - detectedAt)
+          ? frame
+          : best,
+      );
+      const temperatures = positions
+        .map((position) => zoneValue(closest, position, 0, true))
+        .filter((value): value is number => value !== null);
+      if (!temperatures.length) return [];
+      return [
+        {
+          value: [
+            detectedAt,
+            temperatures.reduce((sum, value) => sum + value, 0) /
+              temperatures.length,
+          ],
+          alert,
+          itemStyle: {
+            color: alertColors[alert.severity],
+            borderColor: "#fff",
+            borderWidth: 2,
+          },
+        },
+      ];
+      });
     chart.setOption({
       animation: false,
       color: positions.map((p) => sensorColors[p]),
@@ -76,7 +126,7 @@ export default function TemperatureChart({
         enabled: true,
         label: {
           description:
-            "Temperature history for the top, middle and bottom of one chamber in degrees Celsius. Times are in Bangkok. Gaps indicate missing measurements. Use the legend to show or hide a zone.",
+            "Temperature history for the top, middle and bottom of the selected machine in degrees Celsius. Times are in Bangkok. Gaps indicate missing measurements. Use the legend to show or hide a zone.",
         },
       },
       textStyle: { fontFamily: "Arial, sans-serif", color: "#74818b" },
@@ -151,20 +201,45 @@ export default function TemperatureChart({
           brushSelect: false,
         },
       ],
-      series: visible.map((p) => ({
-        name: positionLabels[p],
-        type: "line",
-        showSymbol: false,
-        connectNulls: false,
-        smooth: false,
-        itemStyle: { color: sensorColors[p] },
-        lineStyle: { width: 2.5, color: sensorColors[p] },
-        emphasis: { focus: "series" },
-        data: display.map((f) => [
-          Date.parse(f.timestamp),
-          zoneValue(f, p, 0, true),
-        ]),
-      })),
+      series: [
+        ...visible.map((p) => ({
+          name: positionLabels[p],
+          type: "line",
+          showSymbol: false,
+          connectNulls: false,
+          smooth: false,
+          itemStyle: { color: sensorColors[p] },
+          lineStyle: { width: 2.5, color: sensorColors[p] },
+          emphasis: { focus: "series" },
+          data: display.map((f) => [
+            Date.parse(f.timestamp),
+            zoneValue(f, p, 0, true),
+          ]),
+        })),
+        ...(alertPoints.length
+          ? [
+              {
+                name: "Alerts",
+                type: "scatter",
+                symbol: "diamond",
+                symbolSize: large ? 15 : 13,
+                z: 20,
+                data: alertPoints,
+                emphasis: { scale: 1.35 },
+                tooltip: {
+                  trigger: "item",
+                  formatter: (input: unknown) => {
+                    const point = input as {
+                      data: { alert: ResearchAlert };
+                    };
+                    const alert = point.data.alert;
+                    return `<strong>${alert.title}</strong><br/><span style="color:${alertColors[alert.severity]}">●</span> ${alert.severity.charAt(0).toUpperCase() + alert.severity.slice(1)} · ${dateTime(alert.detected_at)} ICT`;
+                  },
+                },
+              },
+            ]
+          : []),
+      ],
     });
     const observer = new ResizeObserver(() => chart.resize());
     observer.observe(ref.current);
@@ -172,13 +247,13 @@ export default function TemperatureChart({
       observer.disconnect();
       chart.dispose();
     };
-  }, [history, visible]);
+  }, [chartInput, visible]);
   return (
     <div
       ref={ref}
       className={`temperature-chart ${large ? "chart-large" : ""}`}
       role="img"
-      aria-label="Temperature history in Celsius. Use the labeled sensor toggles to show or hide zones. Missing readings appear as gaps. Open Advanced Analysis on Temperature Trends for the full measurement table."
+      aria-label={`Temperature history in Celsius with ${alerts.length} alert marker${alerts.length === 1 ? "" : "s"}. Use the labeled sensor toggles to show or hide zones. Missing readings appear as gaps.`}
     />
   );
 }

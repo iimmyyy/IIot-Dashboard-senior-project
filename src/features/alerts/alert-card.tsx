@@ -2,11 +2,13 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, Info } from "lucide-react";
-import { api } from "@/lib/api/client";
+import { api, mode } from "@/lib/api/client";
+import { appendAlertAcknowledgementAudit } from "@/lib/audit/browser";
 import { dateTime } from "@/lib/utils";
 import type { ResearchAlert } from "@/types";
 import { Badge, Details } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
+import { useCurrentUser } from "@/features/auth/auth-context";
 
 export function AlertCard({
   alert,
@@ -16,11 +18,18 @@ export function AlertCard({
   compact?: boolean;
 }) {
   const client = useQueryClient();
+  const user = useCurrentUser();
   const [confirming, setConfirming] = useState(false);
-  const [name, setName] = useState("");
   const mutation = useMutation({
-    mutationFn: () => api.acknowledge(alert, name.trim()),
-    onSuccess: () => {
+    mutationFn: () => api.acknowledge(alert, user.displayName),
+    onSuccess: (updatedAlert) => {
+      if (mode === "demo")
+        appendAlertAcknowledgementAudit(
+          localStorage,
+          alert,
+          user,
+          updatedAlert.acknowledged_at ?? undefined,
+        );
       void client.invalidateQueries({ queryKey: ["alerts"] });
       setConfirming(false);
     },
@@ -60,6 +69,7 @@ export function AlertCard({
         <div className="alert-meta">
           <span>{dateTime(alert.detected_at)} ICT</span>
           <span>{alert.experiment_id}</span>
+          {alert.chamber_id && <span>{alert.chamber_id}</span>}
           {alert.resolved_at && (
             <Badge tone="good">
               <Check size={12} />
@@ -76,11 +86,6 @@ export function AlertCard({
               </div>
             ))}
           </div>
-          <p>
-            Meeting Criterion T alone does not mean that the full stopping
-            criteria have been satisfied. Drying rate and air utilization also
-            need to be assessed by the research team.
-          </p>
           {alert.resolved_at && (
             <p>Resolved: {dateTime(alert.resolved_at)} ICT</p>
           )}
@@ -96,29 +101,21 @@ export function AlertCard({
             className="ack-form"
             onSubmit={(e) => {
               e.preventDefault();
-              if (name.trim()) mutation.mutate();
+              mutation.mutate();
             }}
           >
             <p>
               Acknowledging records that you have read this alert. It does not
               resolve the underlying issue.
             </p>
-            <label>
-              Your name
-              <input
-                value={name}
-                maxLength={100}
-                required
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter your name"
-                autoFocus
-              />
-            </label>
+            <p className="acknowledge-actor">
+              Signed in as <strong>{user.displayName}</strong>
+            </p>
             <div className="button-row">
               <Button
                 type="submit"
                 size="sm"
-                disabled={mutation.isPending || !name.trim()}
+                disabled={mutation.isPending}
               >
                 {mutation.isPending ? "Saving…" : "Confirm Acknowledgement"}
               </Button>

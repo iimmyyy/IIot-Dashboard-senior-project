@@ -2,40 +2,48 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity,
-  ArrowUpRight,
   Bell,
   BookOpen,
   ChartNoAxesCombined,
-  ChevronRight,
+  ClipboardList,
   FlaskConical,
   LayoutDashboard,
   Leaf,
+  LogOut,
   Radio,
   Server,
-  ShieldCheck,
   X,
 } from "lucide-react";
 import { useState } from "react";
 import { useMonitor } from "@/hooks/use-monitor";
 import { Button } from "@/components/ui/button";
-import { cn, dateTime } from "@/lib/utils";
+import { logout } from "@/features/auth/actions";
+import { useCurrentUser } from "@/features/auth/auth-context";
+import { roleLabels } from "@/lib/auth/types";
+import { cn } from "@/lib/utils";
 
 const navigation = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/trends", label: "Temperature Trends", icon: ChartNoAxesCombined },
+  { href: "/daily-records", label: "Daily Records", icon: ClipboardList },
   { href: "/experiments", label: "Experiment History", icon: FlaskConical },
   { href: "/alerts", label: "Alerts", icon: Bell },
   { href: "/system", label: "System Status", icon: Server },
 ];
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { mode, alerts, now, status } = useMonitor();
+  const user = useCurrentUser();
+  const { mode, alerts, status } = useMonitor();
   const [guide, setGuide] = useState(false);
   const unacknowledged =
     alerts.data?.filter((a) => !a.acknowledged_at && !a.resolved_at).length ??
     0;
-  const page = navigation.find((n) => n.href === pathname);
+  const initials = user.displayName
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
@@ -50,18 +58,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             BioDry<span className="brand-sub">RESEARCH MONITOR</span>
           </span>
         </Link>
-        <div className="workspace-label">WORKSPACE</div>
-        <div className="lab-switch">
-          <span className="lab-icon">
-            <FlaskConical size={17} />
-          </span>
-          <span>
-            <strong>Biodrying Laboratory</strong>
-            <small>Research workspace</small>
-          </span>
-          <ChevronRight size={14} />
-        </div>
-        <div className="workspace-label navigation-label">MONITORING</div>
         <nav aria-label="Main navigation">
           {navigation.map((item) => (
             <Link
@@ -78,36 +74,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
-        <div className="sidebar-bottom">
-          <div className="monitor-only">
-            <ShieldCheck size={19} />
-            <strong>Observe. Understand. Decide.</strong>
-            <p>
-              Monitoring and decision support.
-              <br />
-              Physical operation stays with you.
-            </p>
-          </div>
-          <button className="guide-link" onClick={() => setGuide(!guide)}>
-            <BookOpen size={18} />
-            Quick start guide
-            <ArrowUpRight size={15} />
-          </button>
-          <div className="lab-profile">
-            <span className="avatar">BL</span>
-            <span>
-              <strong>Biodrying Lab</strong>
-              <small>Research & development</small>
-            </span>
-          </div>
-        </div>
       </aside>
       <div className="main-column">
         <header className="topbar">
-          <div className="breadcrumb">
-            Workspace <ChevronRight size={14} />
-            <span>{page?.label ?? "Overview"}</span>
-          </div>
           <div className="topbar-right">
             <span className="timezone">Bangkok · UTC+7</span>
             <button
@@ -125,21 +94,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Bell size={19} />
               {unacknowledged > 0 && <i />}
             </Link>
-            <span className="avatar small">BL</span>
+            <div className="current-user">
+              <span className="avatar small" aria-hidden="true">
+                {initials}
+              </span>
+              <span className="current-user-copy">
+                <strong>{user.displayName}</strong>
+                <small>{roleLabels[user.role]}</small>
+              </span>
+              <form action={logout}>
+                <button
+                  type="submit"
+                  className="notification-button logout-button"
+                  aria-label="Sign out"
+                  title="Sign out"
+                >
+                  <LogOut size={17} />
+                </button>
+              </form>
+            </div>
           </div>
         </header>
         {mode === "demo" ? (
           <div className="demo-banner">
             <span>
               <FlaskConical size={15} />
-              <strong>Demo Mode — Simulated Data</strong>
-              <span className="demo-explanation">
-                Explore the workspace with sample experiments.
-              </span>
+              <strong>Demo data</strong>
             </span>
-            <Link href="/system">
-              About this demo <ArrowUpRight size={14} />
-            </Link>
           </div>
         ) : (
           <div className="live-banner">
@@ -149,16 +130,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
         <main id="main-content">{children}</main>
-        <footer className="footer">
-          <span>
-            <Activity size={13} />
-            Biodrying Monitoring & Decision Support
-          </span>
-          <span>
-            {now ? dateTime(now) : "Loading time…"} ICT{" "}
-            <span className="footer-separator">·</span> Phase 1
-          </span>
-        </footer>
       </div>
       {guide && (
         <section className="guide-panel" aria-label="Quick start guide">
@@ -173,11 +144,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <X size={18} />
             </Button>
           </div>
-          <p>Three sensor zones. One connected chamber.</p>
+          <p>Three machines, each with Top, Middle, and Bottom sensor zones.</p>
           <ol>
             <li>
               <strong>Read the temperatures.</strong> Top, Middle, and Bottom
-              show the same chamber at different heights. A dash means the
+              show each machine at different heights. A dash means the
               reading is unavailable.
             </li>
             <li>

@@ -5,6 +5,7 @@ import {
   systemSchema,
   telemetrySchema,
   type DataMode,
+  type Chamber,
   type ResearchAlert,
   type Scenario,
 } from "@/types";
@@ -72,21 +73,30 @@ export const api = {
           `${endpoints.experiments}/${encodeURIComponent(id)}`,
           experimentSchema.nullable(),
         ),
-  latest: (scenario: Scenario) =>
+  latest: (scenario: Scenario, chamberId: Chamber = "L1") =>
     mode === "demo"
-      ? Promise.resolve(demoLatest(scenario))
-      : request(endpoints.latest, telemetrySchema.nullable()),
-  history: (id: string, start: number, end: number) =>
-    mode === "demo"
-      ? Promise.resolve(demoHistory(id, start, end))
+      ? Promise.resolve(demoLatest(scenario, chamberId))
       : request(
-          `${endpoints.history}?${new URLSearchParams({ experiment_id: id, start: new Date(start).toISOString(), end: new Date(end).toISOString() })}`,
+          `${endpoints.latest}?${new URLSearchParams({ chamber_id: chamberId })}`,
+          telemetrySchema.nullable(),
+        ),
+  history: (
+    id: string,
+    start: number,
+    end: number,
+    chamberId: Chamber = "L1",
+  ) =>
+    mode === "demo"
+      ? Promise.resolve(demoHistory(id, start, end, chamberId))
+      : request(
+          `${endpoints.history}?${new URLSearchParams({ experiment_id: id, chamber_id: chamberId, start: new Date(start).toISOString(), end: new Date(end).toISOString() })}`,
           z.array(telemetrySchema),
         ).then((frames) =>
           frames
             .filter(
               (f) =>
                 f.experiment_id === id &&
+                f.chamber_id === chamberId &&
                 Date.parse(f.timestamp) >= start &&
                 Date.parse(f.timestamp) <= end,
             )
