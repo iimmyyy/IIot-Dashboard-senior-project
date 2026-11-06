@@ -90,5 +90,4 @@ volumes:
   biodry_postgres_data:
 
 networks:
-  biodry_internal:
-    internal: true
+  biodry_internal: {}
