@@ -58,4 +58,60 @@ describe("signed auth session", () => {
       ).toThrow("AUTH_SESSION_SECRET");
     }
   });
+
+  it("rejects demo sessions after switching to production with the same secret", () => {
+    const publicDemoEnv = {
+      NODE_ENV: "production",
+      BIODRY_DEPLOYMENT_PROFILE: "public-demo",
+      NEXT_PUBLIC_DATA_MODE: "demo",
+      AUTH_SESSION_SECRET:
+        "test-session-secret-that-is-longer-than-32-characters",
+      DEMO_AUTH_PASSWORD: "a-private-public-demo-password",
+    };
+    const token = encodeSession(session(), publicDemoEnv);
+    expect(decodeSession(token, publicDemoEnv)?.user.role).toBe("researcher");
+
+    const productionEnv = {
+      ...publicDemoEnv,
+      BIODRY_DEPLOYMENT_PROFILE: "production",
+    };
+    expect(decodeSession(token, productionEnv)).toBeNull();
+    expect(() => encodeSession(session(), productionEnv)).toThrow(
+      "Prototype sessions are disabled",
+    );
+  });
+
+  it("does not accept a session issued for another demo profile", () => {
+    const localEnv = {
+      ...secureEnv,
+      NODE_ENV: "development",
+      BIODRY_DEPLOYMENT_PROFILE: "local-demo",
+    };
+    const publicDemoEnv = {
+      ...secureEnv,
+      NODE_ENV: "production",
+      BIODRY_DEPLOYMENT_PROFILE: "public-demo",
+      NEXT_PUBLIC_DATA_MODE: "demo",
+      DEMO_AUTH_PASSWORD: "a-private-public-demo-password",
+    };
+    const localCookie = encodeSession(session(), localEnv);
+    const publicCookie = encodeSession(session(), publicDemoEnv);
+
+    expect(decodeSession(localCookie, localEnv)).not.toBeNull();
+    expect(decodeSession(publicCookie, publicDemoEnv)).not.toBeNull();
+    expect(decodeSession(localCookie, publicDemoEnv)).toBeNull();
+    expect(decodeSession(publicCookie, localEnv)).toBeNull();
+  });
+
+  it("does not allow demo sessions when the deployment policy is invalid", () => {
+    const invalidEnv = {
+      ...secureEnv,
+      NODE_ENV: "production",
+      BIODRY_DEPLOYMENT_PROFILE: "local-demo",
+    };
+    expect(decodeSession(encodeSession(session(), secureEnv), invalidEnv)).toBeNull();
+    expect(() => encodeSession(session(), invalidEnv)).toThrow(
+      "Prototype sessions are disabled",
+    );
+  });
 });
