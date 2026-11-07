@@ -25,11 +25,16 @@ services:
     restart: unless-stopped
     init: true
     environment:
-      BIODRY_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-biodry}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-biodry}
+      BIODRY_DATABASE_HOST: db
+      BIODRY_DATABASE_PORT: "5432"
+      BIODRY_DATABASE_NAME: ${POSTGRES_DB:-biodry}
+      BIODRY_DATABASE_USER: ${POSTGRES_USER:-biodry}
+      BIODRY_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
       BIODRY_FRONTEND_ORIGIN: http://localhost:${FRONTEND_PORT:-3000}
       BIODRY_COOKIE_SECURE: "false"
       BIODRY_ENVIRONMENT: local
       BIODRY_SESSION_HOURS: ${BIODRY_SESSION_HOURS:-8}
+      BIODRY_STAFF_EDIT_WINDOW_HOURS: ${BIODRY_STAFF_EDIT_WINDOW_HOURS:-24}
     depends_on:
       db:
         condition: service_healthy

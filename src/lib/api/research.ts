@@ -76,6 +76,20 @@ export const actionItemSchema = z.object({
   occurred_at: iso,
 });
 
+export const actionHistorySchema = z.object({
+  id: z.string(),
+  action: z.string(),
+  title: z.string(),
+  status: z.string(),
+  project_id: z.string(),
+  experiment_id: z.string().nullable(),
+  target_id: z.string(),
+  occurred_at: iso,
+  actor_id: z.string(),
+  actor_name: z.string(),
+  reviewer_name: z.string().nullable(),
+});
+
 export const persistentAuditSchema = z.object({
   id: z.string(),
   project_id: z.string().nullable(),
@@ -104,6 +118,7 @@ export type MeasurementValues = z.infer<typeof measurementValuesSchema>;
 export type ResearchExperiment = z.infer<typeof researchExperimentSchema>;
 export type MeasurementRecord = z.infer<typeof measurementRecordSchema>;
 export type ActionItem = z.infer<typeof actionItemSchema>;
+export type ActionHistory = z.infer<typeof actionHistorySchema>;
 export type PersistentAudit = z.infer<typeof persistentAuditSchema>;
 export type CompletionRequest = z.infer<typeof completionRequestSchema>;
 
@@ -193,8 +208,18 @@ export const researchApi = {
       measurementRecordSchema,
       { method: "POST", body: JSON.stringify({ comment: comment || null }) },
     ),
-  actions: () => apiRequest("/actions/mine", actionItemSchema.array()),
-  audit: () => apiRequest("/audit-events", persistentAuditSchema.array()),
+  pendingActions: () =>
+    apiRequest("/actions/pending", actionItemSchema.array()),
+  actionHistory: () => apiRequest("/actions/mine", actionHistorySchema.array()),
+  audit: (input?: { projectId?: string; experimentId?: string }) => {
+    const query = new URLSearchParams();
+    if (input?.projectId) query.set("project_id", input.projectId);
+    if (input?.experimentId) query.set("experiment_id", input.experimentId);
+    return apiRequest(
+      `/audit-events${query.size ? `?${query}` : ""}`,
+      persistentAuditSchema.array(),
+    );
+  },
   requestCompletion: (experimentId: string, rationale: string) =>
     apiRequest(
       `/experiments/${encodeURIComponent(experimentId)}/completion-requests`,

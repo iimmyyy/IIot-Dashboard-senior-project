@@ -25,11 +25,17 @@ import {
 import {
   researchApi,
   researchApiEnabled,
+  type ActionHistory,
   type MeasurementRecord,
   type MeasurementValues,
   type PersistentAudit,
   type ResearchExperiment,
 } from "@/lib/api/research";
+import {
+  canEnterMeasurements,
+  canReviewAudit,
+  roleForProject,
+} from "@/lib/auth/project-permissions";
 
 function emptyValues() {
   return Object.fromEntries(
@@ -357,6 +363,7 @@ function PersistentDailyRecordsPage() {
   const [experimentId, setExperimentId] = useState("");
   const [records, setRecords] = useState<MeasurementRecord[]>([]);
   const [audit, setAudit] = useState<PersistentAudit[]>([]);
+  const [actionHistory, setActionHistory] = useState<ActionHistory[]>([]);
   const [actionCount, setActionCount] = useState(0);
   const [recordDate, setRecordDate] = useState(() => bangkokDate());
   const [historicalLabel, setHistoricalLabel] = useState("current");
@@ -377,20 +384,27 @@ function PersistentDailyRecordsPage() {
       ),
     [experimentId, historicalLabel, recordDate, records],
   );
+  const selectedExperiment = experiments.find(
+    (experiment) => experiment.id === experimentId,
+  );
+  const selectedProjectRole = roleForProject(
+    user,
+    selectedExperiment?.project_id,
+  );
 
   async function reload() {
     setLoading(true);
     try {
-      const [nextExperiments, nextRecords, nextAudit, actions] =
+      const [nextExperiments, nextRecords, nextHistory, actions] =
         await Promise.all([
           researchApi.experiments(),
           researchApi.records(),
-          researchApi.audit(),
-          researchApi.actions(),
+          researchApi.actionHistory(),
+          researchApi.pendingActions(),
         ]);
       setExperiments(nextExperiments);
       setRecords(nextRecords);
-      setAudit(nextAudit);
+      setActionHistory(nextHistory);
       setActionCount(actions.length);
       setExperimentId((current) => current || nextExperiments[0]?.id || "");
       setError("");
@@ -409,6 +423,37 @@ function PersistentDailyRecordsPage() {
     const frame = requestAnimationFrame(() => void reload());
     return () => cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    if (
+      !selectedExperiment ||
+      !canReviewAudit(user, selectedExperiment.project_id)
+    ) {
+      return;
+    }
+    let active = true;
+    void researchApi
+      .audit({
+        projectId: selectedExperiment.project_id,
+        experimentId: selectedExperiment.id,
+      })
+      .then((entries) => {
+        if (active) setAudit(entries);
+      })
+      .catch((reason: unknown) => {
+        if (active) {
+          setAudit([]);
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "The experiment audit could not be loaded.",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedExperiment, user]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() =>
@@ -492,9 +537,12 @@ function PersistentDailyRecordsPage() {
     }
   }
 
-  const canEdit = user.role === "staff";
+  const canEnter = canEnterMeasurements(user, selectedExperiment?.project_id);
+  const ownsSelectedRecord =
+    !selectedRecord || selectedRecord.created_by_id === user.id;
   const editableRecord =
-    !selectedRecord || ["draft", "rejected"].includes(selectedRecord.status);
+    ownsSelectedRecord &&
+    (!selectedRecord || ["draft", "rejected"].includes(selectedRecord.status));
 
   return (
     <>
@@ -546,7 +594,7 @@ function PersistentDailyRecordsPage() {
       {loading && (
         <p className="daily-empty-copy">Loading shared research records…</p>
       )}
-      {canEdit && editableRecord && experimentId ? (
+      {canEnter && editableRecord && experimentId ? (
         <form className="daily-entry-form" onSubmit={save}>
           {groups.map((group) => (
             <section className="daily-field-section card" key={group}>
@@ -603,13 +651,16 @@ function PersistentDailyRecordsPage() {
       ) : (
         <div className="daily-readonly-note">
           <ClipboardCheck size={18} />
-          {canEdit
-            ? "Submitted records are locked while they are under review."
-            : "Staff enter measurements; Researchers validate; Professors certify."}
+          {canEnter && !ownsSelectedRecord
+            ? "Only the person who entered this record can revise or submit it."
+            : canEnter
+              ? "Submitted records are locked while they are under review."
+              : "You do not have a role in this experiment's project."}
         </div>
       )}
 
-      {(user.role === "researcher" || user.role === "professor") && (
+      {(selectedProjectRole === "researcher" ||
+        selectedProjectRole === "professor") && (
         <section className="card daily-review-note">
           <label>
             Review comment
@@ -668,15 +719,17 @@ function PersistentDailyRecordsPage() {
                     <td>{record.created_by_name}</td>
                     <td>
                       <div className="daily-workflow-actions">
-                        {user.role === "staff" && record.status === "draft" && (
-                          <Button
-                            size="sm"
-                            onClick={() => void transition(record, "submit")}
-                          >
-                            Submit
-                          </Button>
-                        )}
-                        {user.role === "researcher" &&
+                        {record.created_by_id === user.id &&
+                          record.status === "draft" && (
+                            <Button
+                              size="sm"
+                              onClick={() => void transition(record, "submit")}
+                            >
+                              Submit
+                            </Button>
+                          )}
+                        {roleForProject(user, record.project_id) ===
+                          "researcher" &&
                           record.status === "submitted" && (
                             <>
                               <Button
@@ -698,7 +751,8 @@ function PersistentDailyRecordsPage() {
                               </Button>
                             </>
                           )}
-                        {user.role === "professor" &&
+                        {roleForProject(user, record.project_id) ===
+                          "professor" &&
                           record.status === "validated" && (
                             <>
                               <Button
@@ -730,31 +784,60 @@ function PersistentDailyRecordsPage() {
         ) : (
           <EmptyState
             title="No shared records yet"
-            message="Staff can save the first database-backed record above."
+            message="Project members can save the first database-backed record above."
           />
         )}
       </section>
 
       <section className="daily-audit card">
         <div className="daily-section-heading">
-          <h2>Persistent activity</h2>
-          <span>Latest {Math.min(audit.length, 12)}</span>
+          <h2>My activity</h2>
+          <span>Latest {Math.min(actionHistory.length, 12)}</span>
         </div>
         <ol className="audit-list">
-          {audit.slice(0, 12).map((entry) => (
+          {actionHistory.slice(0, 12).map((entry) => (
             <li key={entry.id}>
               <span className="audit-dot" />
               <div>
-                <strong>{entry.action.replaceAll(".", " ")}</strong>
-                <span>{entry.target_type}</span>
+                <strong>{entry.title}</strong>
+                <span>
+                  Current status: {entry.status}
+                  {entry.reviewer_name
+                    ? ` · Reviewed by ${entry.reviewer_name}`
+                    : ""}
+                </span>
                 <small>
-                  {dateTime(entry.occurred_at)} ICT · append-only database event
+                  {dateTime(entry.occurred_at)} ICT · {entry.actor_name}
                 </small>
               </div>
             </li>
           ))}
         </ol>
       </section>
+
+      {canReviewAudit(user, selectedExperiment?.project_id) && (
+        <section className="daily-audit card">
+          <div className="daily-section-heading">
+            <h2>Experiment audit</h2>
+            <span>Latest {Math.min(audit.length, 12)}</span>
+          </div>
+          <ol className="audit-list">
+            {audit.slice(0, 12).map((entry) => (
+              <li key={entry.id}>
+                <span className="audit-dot" />
+                <div>
+                  <strong>{entry.action.replaceAll(".", " ")}</strong>
+                  <span>{entry.target_type}</span>
+                  <small>
+                    {dateTime(entry.occurred_at)} ICT · append-only database
+                    event
+                  </small>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
     </>
   );
 }

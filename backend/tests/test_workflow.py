@@ -113,17 +113,17 @@ def test_unauthenticated_is_401_and_wrong_role_is_403(
     client.cookies.clear()
     assert client.get("/api/v1/daily-records").status_code == 401
 
-    researcher_csrf = login(client, "researcher")
+    staff_csrf = login(client, "staff")
+    record = create_record(client, staff_csrf, seeded["experiment_id"])
+    client.post(
+        f"/api/v1/measurements/{record['id']}/submit",
+        headers=csrf_headers(staff_csrf),
+        json={"comment": "Ready for review"},
+    )
     response = client.post(
-        "/api/v1/daily-records",
-        headers=csrf_headers(researcher_csrf),
-        json={
-            "experiment_id": seeded["experiment_id"],
-            "record_date": "2026-11-06",
-            "historical_label": "current",
-            "values": VALUES,
-            "revision_reason": "Unauthorized attempt",
-        },
+        f"/api/v1/measurements/{record['id']}/validate",
+        headers=csrf_headers(staff_csrf),
+        json={"comment": "Staff cannot validate"},
     )
     assert response.status_code == 403
 

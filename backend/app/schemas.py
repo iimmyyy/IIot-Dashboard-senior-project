@@ -166,6 +166,20 @@ class ActionItemOut(BaseModel):
     occurred_at: datetime
 
 
+class ActionHistoryOut(BaseModel):
+    id: str
+    action: str
+    title: str
+    status: str
+    project_id: str
+    experiment_id: str | None
+    target_id: str
+    occurred_at: datetime
+    actor_id: str
+    actor_name: str
+    reviewer_name: str | None
+
+
 class SupportingValue(BaseModel):
     label: str
     value: str

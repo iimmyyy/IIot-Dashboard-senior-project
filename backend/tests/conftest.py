@@ -48,6 +48,21 @@ def seeded(session_factory: sessionmaker[Session]) -> dict[str, str]:
             name="Test Experiment",
         )
         db.add(experiment)
+        second_project = Project(code="TEST-2", name="Second Test Project")
+        db.add(second_project)
+        db.flush()
+        second_reactor = Reactor(
+            project_id=second_project.id, code="R-02", name="Second Test Reactor"
+        )
+        db.add(second_reactor)
+        db.flush()
+        second_experiment = Experiment(
+            project_id=second_project.id,
+            reactor_id=second_reactor.id,
+            code="EXP-TEST-2",
+            name="Second Test Experiment",
+        )
+        db.add(second_experiment)
         users: dict[str, User] = {}
         for role in ("staff", "researcher", "professor"):
             user = User(
@@ -60,10 +75,34 @@ def seeded(session_factory: sessionmaker[Session]) -> dict[str, str]:
             db.flush()
             db.add(ProjectMembership(user_id=user.id, project_id=project.id, role=role))
             users[role] = user
+        staff2 = User(
+            username="staff2",
+            display_name="Second Staff Test",
+            role="staff",
+            password_hash=hash_password("staff2-secure-test-password"),
+        )
+        db.add(staff2)
+        db.flush()
+        db.add(
+            ProjectMembership(
+                user_id=staff2.id, project_id=project.id, role="staff"
+            )
+        )
+        db.add(
+            ProjectMembership(
+                user_id=users["researcher"].id,
+                project_id=second_project.id,
+                role="staff",
+            )
+        )
+        users["staff2"] = staff2
     return {
         "project_id": project.id,
         "reactor_id": reactor.id,
         "experiment_id": experiment.id,
+        "second_project_id": second_project.id,
+        "second_reactor_id": second_reactor.id,
+        "second_experiment_id": second_experiment.id,
         **{f"{role}_id": user.id for role, user in users.items()},
     }
 

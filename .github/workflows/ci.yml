@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      POSTGRES_PASSWORD: ci-only-postgres-password
+      POSTGRES_PASSWORD: "ci@reserved#percent%slash/password-12345"
       BIODRY_BOOTSTRAP_PASSWORD: ci-only-bootstrap-password-12345
       BIODRY_SMOKE_STAFF_PASSWORD: ci-only-staff-password-12345
       BIODRY_SMOKE_RESEARCHER_PASSWORD: ci-only-researcher-password-12345

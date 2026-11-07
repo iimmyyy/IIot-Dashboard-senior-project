@@ -8,7 +8,9 @@ from app.config import get_settings
 from app.database import Base
 
 config = context.config
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+config.set_main_option(
+    "sqlalchemy.url", get_settings().sqlalchemy_url().replace("%", "%%")
+)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 target_metadata = Base.metadata

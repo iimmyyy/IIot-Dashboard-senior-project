@@ -41,7 +41,9 @@ Scientific roles are scoped through project membership. Technical system adminis
 
 ## Workflow and safety boundaries
 
-Staff create or revise drafts and submit them. Researchers validate or return submitted records and may request experiment completion. Professors certify or return validated records and approve or reject completion requests. Each mutation and its audit event commit in the same database transaction.
+Professor, Researcher, and Staff project members may create their own drafts. Only the person who entered a draft may revise or submit it; Staff revisions and submissions use a configurable 24-hour window by default. Researchers validate or return submitted records and may request experiment completion. Professors certify or return validated records and approve or reject completion requests. Each mutation and its audit event commit in the same database transaction.
+
+Technical audit access is deliberately narrower than general project reads: Staff have no audit-log access, Researchers may read events for one selected experiment in which they hold the Researcher membership, and Professors may read project-wide history. Personal performed-action history is available separately from the pending review queue.
 
 Research approval is not an equipment command. Criterion T, trend heuristics, acknowledgement, validation, certification, or experiment completion never means “stop the blower.” No automatic physical action exists in this stack.
 

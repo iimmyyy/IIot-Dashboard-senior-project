@@ -26,7 +26,10 @@ Backend tests use SQLite for fast transaction and API tests. They cover:
 
 - database login, `/auth/me`, expiry, revocation, logout, CSRF, origin checks, and rate limiting;
 - `401` versus `403` behavior;
-- Staff entry/submission, Researcher validation, Professor certification;
+- entry by all project roles, owner-only revision/submission, and Staff edit-window expiry;
+- project-membership role enforcement across projects;
+- Staff/Researcher/Professor audit scopes and separate pending/personal action endpoints;
+- Researcher validation and Professor certification;
 - completion request and approval;
 - append-only audit protection and same-transaction audit creation; and
 - Alembic upgrade from an empty database.

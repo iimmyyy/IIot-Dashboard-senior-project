@@ -1,6 +1,6 @@
 # BioDry project status
 
-Status date: 2026-11-06
+Status date: 2026-11-07
 
 ## Current milestone
 
@@ -20,7 +20,9 @@ The frontend remains at the repository root. Browser API requests are same-origi
 - Project-scoped Professor, Researcher, and Staff memberships.
 - Separate technical `is_system_admin` metadata that does not grant scientific approval.
 - Projects, one-reactor metadata, sensor metadata schema, experiments, nullable manual measurements, immutable revisions, completion requests, alerts, acknowledgements, append-only audit events, and notification-outbox schema.
-- Staff entry/submission, Researcher validation/rejection, Professor certification/rejection.
+- Owner-only entry revision/submission for all three project roles, with a configurable Staff edit window.
+- Researcher validation/rejection and Professor certification/rejection.
+- Role-scoped audit access, personal action history, and a separate pending-review queue.
 - Researcher completion request and Professor approval/rejection.
 - Database-backed Daily Records and Experiment Workflow UI.
 - Alembic migration at backend startup with bounded retries.
@@ -36,15 +38,19 @@ The frontend remains at the repository root. Browser API requests are same-origi
 
 ## Role workflow
 
-| Operation                             | Staff | Researcher | Professor |
-| ------------------------------------- | ----- | ---------- | --------- |
-| Read scoped project data              | Yes   | Yes        | Yes       |
-| Create/revise draft measurement       | Yes   | No         | No        |
-| Submit measurement                    | Yes   | No         | No        |
-| Validate/return submitted measurement | No    | Yes        | No        |
-| Certify/return validated measurement  | No    | No         | Yes       |
-| Request experiment completion         | No    | Yes        | No        |
-| Approve/reject completion             | No    | No         | Yes       |
+| Operation                              | Staff | Researcher | Professor |
+| -------------------------------------- | ----- | ---------- | --------- |
+| Read scoped project data               | Yes   | Yes        | Yes       |
+| Create own draft measurement           | Yes   | Yes        | Yes       |
+| Revise/submit own draft                | Yes¹  | Yes        | Yes       |
+| Validate/return submitted measurement  | No    | Yes        | No        |
+| Certify/return validated measurement   | No    | No         | Yes       |
+| Request experiment completion          | No    | Yes        | No        |
+| Approve/reject completion              | No    | No         | Yes       |
+| Read technical audit log               | No    | Experiment | Project   |
+| Read personal performed-action history | Yes   | Yes        | Yes       |
+
+¹ Staff revisions and submissions are allowed for 24 hours after entry or return by default. `BIODRY_STAFF_EDIT_WINDOW_HOURS` changes this provisional policy. Professor confirmation is still required.
 
 All checks run at the FastAPI operation boundary. Hiding a button is never treated as authorization.
 

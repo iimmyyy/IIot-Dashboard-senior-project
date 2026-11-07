@@ -17,13 +17,15 @@ Unsafe requests require the CSRF cookie value in `X-CSRF-Token` and the configur
 - `GET|POST /daily-records`
 - `PUT /daily-records/{measurement_id}`
 - `POST /measurements/{measurement_id}/{submit|validate|certify|reject}`
-- `GET /actions/mine`
+- `GET /actions/pending` returns the authenticated user's role-scoped review queue.
+- `GET /actions/mine` returns only actions performed by the authenticated user, with current workflow status and reviewer when available.
 - `POST /experiments/{experiment_id}/completion-requests`
 - `GET /approvals`
 - `POST /approvals/{request_id}/{approve|reject}`
 - `GET /alerts`
 - `POST /alerts/{alert_id}/acknowledge`
-- `GET /audit-events`
+- `GET /audit-events?experiment_id=...` is available to Researcher and Professor members of that experiment's project. Staff receive `403`.
+- `GET /audit-events?project_id=...` is project-wide and Professor-only. Researchers must select an experiment.
 - `GET /health`
 
 OpenAPI documentation is available inside the backend container at `/api/docs`; it is intentionally not published directly to the host. All list and mutation operations are project-scoped.

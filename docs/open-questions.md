@@ -27,7 +27,7 @@ The professor requirement supplied with Issue #1 indicates: Staff records field 
 9. What should appear under “My Actions,” “Pending Approvals,” and activity history for each role?
 10. Which identity provider or account lifecycle is approved by the university?
 
-The current code does not match that proposed matrix: Researcher alone edits daily records, while Researcher and Professor can directly complete/restart a browser-local batch. PR 1 documents this mismatch and does not present the prototype permissions as approved.
+The current database workflow uses a conservative provisional policy while these answers are pending: every project role may enter its own record; only the entry owner may revise or submit it; Staff have a configurable 24-hour window after entry or return; Researchers validate; and Professors certify. Researchers may view only experiment-scoped audit events, Professors may view project-scoped audit events, and Staff have personal activity history but no technical audit access. These choices require professor confirmation and must not be treated as approved research policy.
 
 ## Research criteria
 

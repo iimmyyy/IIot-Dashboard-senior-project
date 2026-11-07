@@ -77,18 +77,12 @@ const experiment =
   experiments.body.find((item) => item.status === "running") ??
   experiments.body[0];
 
-const forbidden = await request("/daily-records", researcher, {
-  method: "POST",
-  body: JSON.stringify({
-    experiment_id: experiment.id,
-    record_date: new Date().toISOString().slice(0, 10),
-    historical_label: `forbidden-${Date.now()}`,
-    values: { temperature_top_c: 55 },
-    revision_reason: "Unauthorized smoke attempt",
-  }),
-});
+const forbidden = await request(
+  `/audit-events?experiment_id=${encodeURIComponent(experiment.id)}`,
+  staff,
+);
 if (forbidden.response.status !== 403)
-  throw new Error("Expected wrong-role 403.");
+  throw new Error("Expected Staff audit access to return 403.");
 
 const created = await request("/daily-records", staff, {
   method: "POST",

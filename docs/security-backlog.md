@@ -11,6 +11,10 @@
 - [x] Explicit same-origin validation for every unsafe HTTP method.
 - [x] Strict `401` unauthenticated and `403` unauthorized behavior.
 - [x] Project-scoped authorization for every read and mutation.
+- [x] Owner-only measurement revision/submission and configurable Staff edit window.
+- [x] Audit access separated by role: none for Staff, experiment scope for Researcher, project scope for Professor.
+- [x] Project membership role, rather than the user's global label, drives workflow authorization.
+- [x] Database URLs assembled from discrete settings so reserved password characters are encoded safely.
 - [x] Scientific project roles separated from technical system administration.
 - [x] Audit records written in the same transaction as each workflow mutation.
 - [x] ORM mutation protection and PostgreSQL trigger protection for audit events.
@@ -32,6 +36,7 @@
 - [ ] Security headers and Content Security Policy verified against the final ingress.
 - [ ] Structured security monitoring, alerting, incident response, and audit export.
 - [ ] Independent authorization, CSRF, session, and penetration review.
+- [ ] Confirm the provisional Staff edit-window duration and correction policy with the professor.
 
 ## Notifications before activation
 

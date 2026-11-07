@@ -1,12 +1,25 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.audit import add_audit_event
-from app.dependencies import Auth, CsrfAuth, Db, require_project_role
-from app.models import Experiment, Measurement, MeasurementRevision, ProjectMembership
+from app.dependencies import (
+    Auth,
+    CsrfAuth,
+    Db,
+    SettingsDep,
+    aware,
+    require_project_role,
+)
+from app.models import (
+    AuditEvent,
+    Experiment,
+    Measurement,
+    MeasurementRevision,
+    ProjectMembership,
+)
 from app.presenters import measurement_out
 from app.schemas import (
     MeasurementCreate,
@@ -43,6 +56,49 @@ def add_revision(
     return revision
 
 
+def require_entry_owner(
+    db: Db,
+    auth: CsrfAuth,
+    measurement: Measurement,
+    settings: SettingsDep,
+) -> ProjectMembership:
+    membership = require_project_role(
+        db, auth, measurement.project_id, {"staff", "researcher", "professor"}
+    )
+    if measurement.created_by_id != auth.user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the person who entered this record can change or submit it.",
+        )
+    if membership.role == "staff":
+        window_started_at = measurement.created_at
+        if measurement.status == "rejected":
+            rejected_at = db.scalar(
+                select(AuditEvent.occurred_at)
+                .where(
+                    AuditEvent.action == "measurement.rejected",
+                    AuditEvent.target_type == "measurement",
+                    AuditEvent.target_id == measurement.id,
+                )
+                .order_by(AuditEvent.occurred_at.desc())
+                .limit(1)
+            )
+            if rejected_at:
+                window_started_at = rejected_at
+        deadline = aware(window_started_at) + timedelta(
+            hours=settings.staff_edit_window_hours
+        )
+        if datetime.now(UTC) > deadline:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "The Staff editing window has closed. Ask a Researcher to review "
+                    "the record before any correction is made."
+                ),
+            )
+    return membership
+
+
 @router.get("/daily-records", response_model=list[MeasurementOut])
 def list_daily_records(
     db: Db,
@@ -72,7 +128,7 @@ def create_daily_record(payload: MeasurementCreate, db: Db, auth: CsrfAuth) -> M
     experiment = db.get(Experiment, payload.experiment_id)
     if not experiment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found.")
-    require_project_role(db, auth, experiment.project_id, {"staff"})
+    require_project_role(db, auth, experiment.project_id, {"staff", "researcher", "professor"})
     existing = db.scalar(
         select(Measurement).where(
             Measurement.experiment_id == experiment.id,
@@ -104,7 +160,11 @@ def create_daily_record(payload: MeasurementCreate, db: Db, auth: CsrfAuth) -> M
         target_id=measurement.id,
         actor_id=auth.user.id,
         project_id=measurement.project_id,
-        details={"revision": 1, "status": "draft"},
+        details={
+            "experiment_id": experiment.id,
+            "revision": 1,
+            "status": "draft",
+        },
     )
     db.commit()
     return measurement_out(get_measurement(db, measurement.id))
@@ -116,9 +176,10 @@ def update_daily_record(
     payload: MeasurementUpdate,
     db: Db,
     auth: CsrfAuth,
+    settings: SettingsDep,
 ) -> MeasurementOut:
     measurement = get_measurement(db, measurement_id)
-    require_project_role(db, auth, measurement.project_id, {"staff"})
+    require_entry_owner(db, auth, measurement, settings)
     if measurement.status not in {"draft", "rejected"}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -136,7 +197,10 @@ def update_daily_record(
         target_id=measurement.id,
         actor_id=auth.user.id,
         project_id=measurement.project_id,
-        details={"revision": measurement.revision},
+        details={
+            "experiment_id": measurement.experiment_id,
+            "revision": measurement.revision,
+        },
     )
     db.commit()
     return measurement_out(get_measurement(db, measurement.id))
@@ -154,9 +218,16 @@ def transition(
     actor_field: str,
     timestamp_field: str,
     comment: str | None,
+    settings: SettingsDep | None = None,
+    owner_required: bool = False,
 ) -> MeasurementOut:
     measurement = get_measurement(db, measurement_id)
-    require_project_role(db, auth, measurement.project_id, {role})
+    if owner_required:
+        if settings is None:
+            raise RuntimeError("Entry-owner transitions require application settings.")
+        require_entry_owner(db, auth, measurement, settings)
+    else:
+        require_project_role(db, auth, measurement.project_id, {role})
     if measurement.status != from_status:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -172,7 +243,12 @@ def transition(
         target_id=measurement.id,
         actor_id=auth.user.id,
         project_id=measurement.project_id,
-        details={"from": from_status, "to": to_status, "comment": comment},
+        details={
+            "experiment_id": measurement.experiment_id,
+            "from": from_status,
+            "to": to_status,
+            "comment": comment,
+        },
     )
     db.commit()
     return measurement_out(get_measurement(db, measurement.id))
@@ -180,7 +256,11 @@ def transition(
 
 @router.post("/measurements/{measurement_id}/submit", response_model=MeasurementOut)
 def submit_measurement(
-    measurement_id: str, payload: TransitionInput, db: Db, auth: CsrfAuth
+    measurement_id: str,
+    payload: TransitionInput,
+    db: Db,
+    auth: CsrfAuth,
+    settings: SettingsDep,
 ) -> MeasurementOut:
     return transition(
         db,
@@ -193,6 +273,8 @@ def submit_measurement(
         actor_field="submitted_by_id",
         timestamp_field="submitted_at",
         comment=payload.comment,
+        settings=settings,
+        owner_required=True,
     )
 
 
@@ -260,7 +342,11 @@ def reject_measurement(
         target_id=measurement.id,
         actor_id=auth.user.id,
         project_id=measurement.project_id,
-        details={"from": previous, "reason": payload.comment},
+        details={
+            "experiment_id": measurement.experiment_id,
+            "from": previous,
+            "reason": payload.comment,
+        },
     )
     db.commit()
     return measurement_out(get_measurement(db, measurement.id))

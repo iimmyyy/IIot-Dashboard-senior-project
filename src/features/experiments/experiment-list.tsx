@@ -13,6 +13,7 @@ import {
   type CompletionRequest,
   type ResearchExperiment,
 } from "@/lib/api/research";
+import { roleForProject } from "@/lib/auth/project-permissions";
 export function ExperimentList() {
   const { experiments, now } = useMonitor();
   const [search, setSearch] = useState("");
@@ -150,14 +151,15 @@ function DatabaseExperimentWorkflow() {
   const [comment, setComment] = useState("");
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
+  const hasProfessorMembership = user.memberships?.some(
+    (membership) => membership.role === "professor",
+  );
 
   const reload = useCallback(async () => {
     try {
       const [nextExperiments, nextApprovals] = await Promise.all([
         researchApi.experiments(),
-        user.role === "professor"
-          ? researchApi.approvals()
-          : Promise.resolve([]),
+        hasProfessorMembership ? researchApi.approvals() : Promise.resolve([]),
       ]);
       setExperiments(nextExperiments);
       setApprovals(nextApprovals);
@@ -169,7 +171,7 @@ function DatabaseExperimentWorkflow() {
           : "Research workflow unavailable.",
       );
     }
-  }, [user.role]);
+  }, [hasProfessorMembership]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => void reload());
@@ -246,7 +248,7 @@ function DatabaseExperimentWorkflow() {
                 {experiment.conditions ||
                   "No experimental conditions recorded."}
               </p>
-              {user.role === "researcher" &&
+              {roleForProject(user, experiment.project_id) === "researcher" &&
                 experiment.status === "running" && (
                   <div className="research-workflow-action">
                     <input
@@ -267,7 +269,7 @@ function DatabaseExperimentWorkflow() {
           </article>
         ))}
       </div>
-      {user.role === "professor" && approvals.length > 0 && (
+      {hasProfessorMembership && approvals.length > 0 && (
         <div className="research-approvals">
           <label>
             Professor review comment

@@ -43,7 +43,8 @@ docker compose exec backend python -m app.cli create-user --username professor -
 
 ## Persistent research workflow
 
-- **Staff** create or revise nullable daily measurements, then submit them.
+- **Professor, Researcher, and Staff** may enter their own nullable daily measurements.
+- Only the person who entered a draft may revise or submit it. Staff entry is limited to a configurable 24-hour window by default.
 - **Researcher** validate submitted records or return them with a reason.
 - **Professor** certify validated records or return them with a reason.
 - After at least one certified record, a Researcher may request experiment completion.
@@ -59,6 +60,8 @@ Every mutation writes an audit event in the same database transaction. Audit eve
 - Cookie-authenticated writes require same-origin validation and a session-bound CSRF token.
 - Login attempts are limited in PostgreSQL by client and username.
 - API authorization checks project membership and role at every operation boundary.
+- Staff cannot read the technical audit log. Researchers see only a selected experiment; Professors may review project audit history.
+- `/actions/mine` is personal performed-action history; the role-specific review queue is separate at `/actions/pending`.
 - Missing authentication returns `401`; authenticated users with the wrong role or project return `403`.
 
 Prototype source-defined accounts remain available only when the frontend is deliberately run outside the database-authenticated stack. Compose always uses database authentication.
@@ -102,7 +105,7 @@ docker compose config
 node scripts/smoke-local.mjs
 ```
 
-The smoke script requires `BIODRY_SMOKE_STAFF_PASSWORD`, `BIODRY_SMOKE_RESEARCHER_PASSWORD`, and `BIODRY_SMOKE_PROFESSOR_PASSWORD` in the process environment. It verifies health, database login, `/auth/me`, `401`, `403`, Staff entry, Researcher validation, Professor certification, and completion approval. `scripts/check-persistence.mjs` verifies the shared record after a Compose down/up cycle.
+The smoke script requires `BIODRY_SMOKE_STAFF_PASSWORD`, `BIODRY_SMOKE_RESEARCHER_PASSWORD`, and `BIODRY_SMOKE_PROFESSOR_PASSWORD` in the process environment. It verifies health, database login, `/auth/me`, `401`, Staff audit denial with `403`, owner entry/submission, Researcher validation, Professor certification, and completion approval. `scripts/check-persistence.mjs` verifies the shared record after a Compose down/up cycle.
 
 ## Repository layout
 
