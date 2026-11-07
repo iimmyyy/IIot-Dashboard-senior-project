@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:ci": "vitest run --reporter=default",
+    "smoke:local": "node scripts/smoke-local.mjs",
+    "check:persistence": "node scripts/check-persistence.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

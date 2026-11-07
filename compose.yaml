@@ -1,0 +1,98 @@
+name: biodry-local
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-biodry}
+      POSTGRES_USER: ${POSTGRES_USER:-biodry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the local .env file}
+    volumes:
+      - biodry_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks: [biodry_internal]
+    stop_grace_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    init: true
+    environment:
+      BIODRY_DATABASE_HOST: db
+      BIODRY_DATABASE_PORT: "5432"
+      BIODRY_DATABASE_NAME: ${POSTGRES_DB:-biodry}
+      BIODRY_DATABASE_USER: ${POSTGRES_USER:-biodry}
+      BIODRY_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      BIODRY_FRONTEND_ORIGIN: http://localhost:${FRONTEND_PORT:-3000}
+      BIODRY_COOKIE_SECURE: "false"
+      BIODRY_ENVIRONMENT: local
+      BIODRY_SESSION_HOURS: ${BIODRY_SESSION_HOURS:-8}
+      BIODRY_STAFF_EDIT_WINDOW_HOURS: ${BIODRY_STAFF_EDIT_WINDOW_HOURS:-24}
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    read_only: true
+    tmpfs: [/tmp]
+    networks: [biodry_internal]
+
+  frontend:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_DATA_MODE: demo
+        NEXT_PUBLIC_RESEARCH_API_MODE: backend
+    restart: unless-stopped
+    init: true
+    environment:
+      BACKEND_INTERNAL_URL: http://backend:8000
+      BIODRY_AUTH_MODE: backend
+      BIODRY_FRONTEND_ORIGIN: http://localhost:${FRONTEND_PORT:-3000}
+      NEXT_PUBLIC_DATA_MODE: demo
+      NEXT_PUBLIC_RESEARCH_API_MODE: backend
+    depends_on:
+      backend:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    read_only: true
+    tmpfs: [/tmp]
+    networks: [biodry_internal]
+
+volumes:
+  biodry_postgres_data:
+
+networks:
+  biodry_internal: {}

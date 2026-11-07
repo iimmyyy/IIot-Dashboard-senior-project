@@ -1,0 +1,2 @@
+"""BioDry backend application."""
+

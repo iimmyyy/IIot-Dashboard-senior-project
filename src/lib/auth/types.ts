@@ -7,6 +7,13 @@ export type SessionUser = {
   username: string;
   displayName: string;
   role: UserRole;
+  isSystemAdmin?: boolean;
+  memberships?: Array<{
+    projectId: string;
+    projectCode: string;
+    projectName: string;
+    role: UserRole;
+  }>;
 };
 
 export type AuthSession = {

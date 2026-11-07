@@ -6,6 +6,13 @@ import { z } from "zod";
 import { authenticateDemoAccount } from "@/lib/auth/accounts";
 import { createSession, deleteSession, readSession } from "@/lib/auth/session";
 import { recordAuditEvent } from "@/lib/audit";
+import {
+  backendAuthEnabled,
+  backendFetch,
+  CSRF_COOKIE,
+  DATABASE_SESSION_COOKIE,
+} from "@/lib/api/backend-auth";
+import { cookies } from "next/headers";
 import { getDeploymentPolicy } from "@/lib/security/deployment";
 import {
   clearRateLimit,
@@ -78,6 +85,22 @@ export async function login(
 }
 
 export async function logout() {
+  if (backendAuthEnabled()) {
+    const cookieStore = await cookies();
+    const csrf = cookieStore.get(CSRF_COOKIE)?.value;
+    if (csrf) {
+      await backendFetch("/api/v1/auth/logout", {
+        method: "POST",
+        headers: {
+          Origin: process.env.BIODRY_FRONTEND_ORIGIN ?? "http://localhost:3000",
+          "X-CSRF-Token": csrf,
+        },
+      }).catch((error) => console.error("[backend-auth] logout failed", error));
+    }
+    cookieStore.delete(DATABASE_SESSION_COOKIE);
+    cookieStore.delete(CSRF_COOKIE);
+    redirect("/login");
+  }
   const session = await readSession();
   if (session) recordAuditEvent(session.user, "auth.sign_out");
   await deleteSession();

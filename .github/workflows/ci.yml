@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
+  frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -30,3 +30,52 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:ci
       - run: npm run build
+
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e "./backend[test]"
+      - run: ruff check backend
+      - run: pytest backend/tests
+
+  stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      POSTGRES_PASSWORD: "ci@reserved#percent%slash/password-12345"
+      BIODRY_BOOTSTRAP_PASSWORD: ci-only-bootstrap-password-12345
+      BIODRY_SMOKE_STAFF_PASSWORD: ci-only-staff-password-12345
+      BIODRY_SMOKE_RESEARCHER_PASSWORD: ci-only-researcher-password-12345
+      BIODRY_SMOKE_PROFESSOR_PASSWORD: ci-only-professor-password-12345
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: docker compose config --quiet
+      - run: docker compose up --build -d --wait
+      - run: docker compose exec -T backend python -m app.cli init-research
+      - run: docker compose exec -T -e BIODRY_BOOTSTRAP_PASSWORD="$BIODRY_SMOKE_STAFF_PASSWORD" backend python -m app.cli create-user --username staff --display-name "CI Staff" --role staff
+      - run: docker compose exec -T -e BIODRY_BOOTSTRAP_PASSWORD="$BIODRY_SMOKE_RESEARCHER_PASSWORD" backend python -m app.cli create-user --username researcher --display-name "CI Researcher" --role researcher
+      - run: docker compose exec -T -e BIODRY_BOOTSTRAP_PASSWORD="$BIODRY_SMOKE_PROFESSOR_PASSWORD" backend python -m app.cli create-user --username professor --display-name "CI Professor" --role professor
+      - run: npm run smoke:local
+      - run: docker compose down
+      - run: docker compose up -d --wait
+      - run: npm run check:persistence
+      - if: always()
+        run: docker compose logs --no-color > compose.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-logs
+          path: compose.log
+      - if: always()
+        run: docker compose down

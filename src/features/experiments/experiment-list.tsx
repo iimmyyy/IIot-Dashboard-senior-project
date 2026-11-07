@@ -1,11 +1,19 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowUpRight, Check, FlaskConical, Search } from "lucide-react";
 import { useMonitor } from "@/hooks/use-monitor";
 import { dateTime, duration, positionLabels } from "@/lib/utils";
 import { Badge, EmptyState, PageHeading } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
+import { useCurrentUser } from "@/features/auth/auth-context";
+import {
+  researchApi,
+  researchApiEnabled,
+  type CompletionRequest,
+  type ResearchExperiment,
+} from "@/lib/api/research";
+import { roleForProject } from "@/lib/auth/project-permissions";
 export function ExperimentList() {
   const { experiments, now } = useMonitor();
   const [search, setSearch] = useState("");
@@ -18,15 +26,21 @@ export function ExperimentList() {
     ) ?? [];
   return (
     <>
-      <PageHeading
-        title="Experiment History"
-      >
+      <PageHeading title="Experiment History">
         <Badge tone="teal">
           <FlaskConical size={13} />
           {experiments.data?.length ?? 0} Experiments
         </Badge>
       </PageHeading>
+      {researchApiEnabled && <DatabaseExperimentWorkflow />}
       <div className="card history-card">
+        {researchApiEnabled && (
+          <div className="daily-readonly-note">
+            <FlaskConical size={18} />
+            Temperature charts below remain simulated. Database workflow status
+            is shown above.
+          </div>
+        )}
         <div className="list-toolbar">
           <label className="search-field">
             <Search size={17} />
@@ -126,5 +140,171 @@ export function ExperimentList() {
         )}
       </div>
     </>
+  );
+}
+
+function DatabaseExperimentWorkflow() {
+  const user = useCurrentUser();
+  const [experiments, setExperiments] = useState<ResearchExperiment[]>([]);
+  const [approvals, setApprovals] = useState<CompletionRequest[]>([]);
+  const [rationale, setRationale] = useState("");
+  const [comment, setComment] = useState("");
+  const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const hasProfessorMembership = user.memberships?.some(
+    (membership) => membership.role === "professor",
+  );
+
+  const reload = useCallback(async () => {
+    try {
+      const [nextExperiments, nextApprovals] = await Promise.all([
+        researchApi.experiments(),
+        hasProfessorMembership ? researchApi.approvals() : Promise.resolve([]),
+      ]);
+      setExperiments(nextExperiments);
+      setApprovals(nextApprovals);
+      setError("");
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Research workflow unavailable.",
+      );
+    }
+  }, [hasProfessorMembership]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => void reload());
+    return () => cancelAnimationFrame(frame);
+  }, [reload]);
+
+  async function requestCompletion(experiment: ResearchExperiment) {
+    if (rationale.trim().length < 10) {
+      setError("Explain the research basis before requesting completion.");
+      return;
+    }
+    try {
+      await researchApi.requestCompletion(experiment.id, rationale);
+      setFeedback(
+        "Completion request sent to the Professor. No equipment action was taken.",
+      );
+      setRationale("");
+      await reload();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Request failed.");
+    }
+  }
+
+  async function review(
+    request: CompletionRequest,
+    decision: "approve" | "reject",
+  ) {
+    if (comment.trim().length < 3) {
+      setError("Enter a review comment before deciding.");
+      return;
+    }
+    try {
+      await researchApi.reviewCompletion(request.id, decision, comment);
+      setFeedback(
+        decision === "approve"
+          ? "Experiment completion approved. This did not control the blower."
+          : "Completion request returned to the Researcher.",
+      );
+      setComment("");
+      await reload();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Review failed.");
+    }
+  }
+
+  return (
+    <section className="card research-workflow-card">
+      <div className="card-heading">
+        <div>
+          <h2>Research Workflow</h2>
+          <p>
+            Persistent experiment status and human approvals from PostgreSQL.
+          </p>
+        </div>
+        <Badge tone="teal">{experiments.length} database runs</Badge>
+      </div>
+      <div className="experiment-list">
+        {experiments.map((experiment) => (
+          <article className="experiment-row" key={experiment.id}>
+            <span className="experiment-row-icon">
+              <FlaskConical size={23} />
+            </span>
+            <div className="experiment-row-body">
+              <div className="experiment-row-heading">
+                <span className="overline">{experiment.code}</span>
+                <Badge
+                  tone={experiment.status === "running" ? "good" : "neutral"}
+                >
+                  {experiment.status === "running" ? "Running" : "Completed"}
+                </Badge>
+              </div>
+              <h2>{experiment.name}</h2>
+              <p>
+                {experiment.conditions ||
+                  "No experimental conditions recorded."}
+              </p>
+              {roleForProject(user, experiment.project_id) === "researcher" &&
+                experiment.status === "running" && (
+                  <div className="research-workflow-action">
+                    <input
+                      value={rationale}
+                      placeholder="Research basis for requesting completion"
+                      maxLength={4000}
+                      onChange={(event) => setRationale(event.target.value)}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => void requestCompletion(experiment)}
+                    >
+                      Request Completion
+                    </Button>
+                  </div>
+                )}
+            </div>
+          </article>
+        ))}
+      </div>
+      {hasProfessorMembership && approvals.length > 0 && (
+        <div className="research-approvals">
+          <label>
+            Professor review comment
+            <input
+              value={comment}
+              maxLength={2000}
+              onChange={(event) => setComment(event.target.value)}
+            />
+          </label>
+          {approvals.map((approval) => (
+            <div key={approval.id} className="research-approval-row">
+              <span>{approval.rationale}</span>
+              <Button
+                size="sm"
+                onClick={() => void review(approval, "approve")}
+              >
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void review(approval, "reject")}
+              >
+                Return
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+      {feedback && <p className="inline-feedback">{feedback}</p>}
+      {error && (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }
