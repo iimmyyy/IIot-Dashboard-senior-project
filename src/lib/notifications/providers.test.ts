@@ -12,11 +12,11 @@ describe("notification providers", () => {
     expect(() => emailConfigFromEnv({})).toThrow("ALERT_EMAIL_FROM");
   });
 
-  it("reads a MailerSend display-name sender from server configuration", () => {
+  it("reads a Resend display-name sender from server configuration", () => {
     expect(
       emailConfigFromEnv({
-        EMAIL_PROVIDER: "mailersend",
-        MAILERSEND_API_TOKEN: "secret",
+        EMAIL_PROVIDER: "resend",
+        RESEND_API_KEY: "secret",
         ALERT_EMAIL_FROM: "BioDry Alerts <alerts@test.example>",
         ALERT_EMAIL_TO: "lab@example.com",
       }),
@@ -28,11 +28,10 @@ describe("notification providers", () => {
     });
   });
 
-  it("sends a MailerSend report with a fixed server-side recipient", async () => {
-    const headers = new Headers({ "x-message-id": "email-1" });
+  it("sends a Resend report with a fixed server-side recipient", async () => {
     const fetcher = vi
       .fn()
-      .mockResolvedValue(new Response(null, { status: 202, headers }));
+      .mockResolvedValue(Response.json({ id: "email-1" }, { status: 200 }));
     const receipt = await sendEmailAlert(
       demoAlerts()[0],
       "alert-1:email",
@@ -45,18 +44,16 @@ describe("notification providers", () => {
       fetcher,
     );
     const init = fetcher.mock.calls[0][1] as RequestInit;
-    expect(fetcher.mock.calls[0][0]).toBe(
-      "https://api.mailersend.com/v1/email",
+    expect(fetcher.mock.calls[0][0]).toBe("https://api.resend.com/emails");
+    expect(new Headers(init.headers).get("Idempotency-Key")).toBe(
+      "alert-1:email",
     );
     const payload = JSON.parse(init.body as string);
-    expect(payload.to).toEqual([{ email: "lab@example.com" }]);
-    expect(payload.from).toEqual({
-      email: "alerts@test.example",
-      name: "BioDry Alerts",
-    });
+    expect(payload.to).toEqual(["lab@example.com"]);
+    expect(payload.from).toBe("BioDry Alerts <alerts@test.example>");
     expect(payload.attachments).toHaveLength(1);
     expect(payload.attachments[0]).toMatchObject({
-      disposition: "attachment",
+      content_type: "application/pdf",
       filename: expect.stringMatching(/batch-summary\.pdf$/),
     });
     expect(
@@ -65,7 +62,27 @@ describe("notification providers", () => {
         .toString(),
     ).toBe("%PDF-");
     expect(receipt.providerMessageId).toBe("email-1");
-    expect(receipt.provider).toBe("mailersend");
+    expect(receipt.provider).toBe("resend");
+  });
+
+  it("rejects a successful Resend response without an email ID", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(Response.json({}, { status: 200 }));
+
+    await expect(
+      sendEmailAlert(
+        demoAlerts()[0],
+        "alert-2:email",
+        {
+          apiToken: "secret",
+          fromEmail: "alerts@test.example",
+          fromName: "BioDry Alerts",
+          to: "lab@example.com",
+        },
+        fetcher,
+      ),
+    ).rejects.toThrow("without an email ID");
   });
 
   it("uses a valid stable UUID retry key for LINE and treats 409 as accepted", async () => {

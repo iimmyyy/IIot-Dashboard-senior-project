@@ -5,7 +5,7 @@ import { batchReportFilename, createBatchSummaryPdf } from "./batch-report";
 
 export type DeliveryReceipt = {
   channel: "email" | "line";
-  provider: "mailersend" | "line-messaging-api";
+  provider: "resend" | "line-messaging-api";
   providerMessageId: string | null;
   duplicate: boolean;
 };
@@ -36,8 +36,8 @@ function required(value: string | undefined, name: string) {
 export function emailConfigFromEnv(
   env: Partial<NodeJS.ProcessEnv> = process.env,
 ): EmailProviderConfig {
-  const provider = (env.EMAIL_PROVIDER ?? "mailersend").trim().toLowerCase();
-  if (provider !== "mailersend")
+  const provider = (env.EMAIL_PROVIDER ?? "resend").trim().toLowerCase();
+  if (provider !== "resend")
     throw new NotificationConfigurationError(
       `Unsupported EMAIL_PROVIDER: ${provider}.`,
     );
@@ -49,7 +49,7 @@ export function emailConfigFromEnv(
       "ALERT_EMAIL_FROM must be an email address or Name <email>.",
     );
   return {
-    apiToken: required(env.MAILERSEND_API_TOKEN, "MAILERSEND_API_TOKEN"),
+    apiToken: required(env.RESEND_API_KEY, "RESEND_API_KEY"),
     fromEmail: mailbox?.[2] ?? bareEmail?.[1] ?? "",
     fromName: mailbox?.[1]?.trim() || "BioDry Alerts",
     to: required(env.ALERT_EMAIL_TO, "ALERT_EMAIL_TO"),
@@ -82,22 +82,22 @@ export function lineRetryKey(idempotencyKey: string) {
 
 export async function sendEmailAlert(
   alert: ResearchAlert,
-  _idempotencyKey: string,
+  idempotencyKey: string,
   config = emailConfigFromEnv(),
   fetcher: typeof fetch = fetch,
 ): Promise<DeliveryReceipt> {
   const report = formatEmailAlert(alert);
   const batchReport = await createBatchSummaryPdf(alert);
-  const response = await fetcher("https://api.mailersend.com/v1/email", {
+  const response = await fetcher("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.apiToken}`,
       "Content-Type": "application/json",
-      "X-Requested-With": "XMLHttpRequest",
+      "Idempotency-Key": idempotencyKey,
     },
     body: JSON.stringify({
-      from: { email: config.fromEmail, name: config.fromName },
-      to: [{ email: config.to }],
+      from: `${config.fromName} <${config.fromEmail}>`,
+      to: [config.to],
       subject: report.subject,
       text: report.text,
       html: report.html,
@@ -105,24 +105,26 @@ export async function sendEmailAlert(
         {
           filename: batchReportFilename(alert),
           content: Buffer.from(batchReport).toString("base64"),
-          disposition: "attachment",
+          content_type: "application/pdf",
         },
       ],
     }),
     signal: AbortSignal.timeout(15_000),
   });
   const body = await response.text();
-  if (!response.ok) throw providerError("MailerSend", response.status, body);
-  const id = response.headers.get("x-message-id");
-  if (!id)
-    throw providerError(
-      "MailerSend",
-      response.status,
-      body || "The request was accepted without a message ID.",
-    );
+  if (!response.ok) throw providerError("Resend", response.status, body);
+  const parsed = (() => {
+    try {
+      return JSON.parse(body) as { id?: unknown };
+    } catch {
+      return null;
+    }
+  })();
+  const id = typeof parsed?.id === "string" ? parsed.id : null;
+  if (!id) throw new Error("Resend accepted the request without an email ID.");
   return {
     channel: "email",
-    provider: "mailersend",
+    provider: "resend",
     providerMessageId: id,
     duplicate: false,
   };
