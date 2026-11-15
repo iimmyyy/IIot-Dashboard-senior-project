@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { ResearchAlert } from "@/types";
 import { formatEmailAlert, formatLineFlexAlert } from "./outbox";
 import { batchReportFilename, createBatchSummaryPdf } from "./batch-report";
+import type { NotificationContext } from "./notification-context";
 
 export type DeliveryReceipt = {
   channel: "email" | "line";
@@ -83,11 +84,17 @@ export function lineRetryKey(idempotencyKey: string) {
 export async function sendEmailAlert(
   alert: ResearchAlert,
   idempotencyKey: string,
+  context: NotificationContext,
   config = emailConfigFromEnv(),
   fetcher: typeof fetch = fetch,
 ): Promise<DeliveryReceipt> {
-  const report = formatEmailAlert(alert);
-  const batchReport = await createBatchSummaryPdf(alert);
+  const chamber = alert.chamber_id ?? "Unassigned";
+  const report = formatEmailAlert(alert, context, chamber);
+  const batchReport = await createBatchSummaryPdf(alert, {
+    startedAt: context.batchStartedAt,
+    generatedAt: context.sentAt,
+    currentAverageTemperatureC: context.currentAverageTemperatureC,
+  });
   const response = await fetcher("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -133,6 +140,7 @@ export async function sendEmailAlert(
 export async function sendLineAlert(
   alert: ResearchAlert,
   idempotencyKey: string,
+  context: NotificationContext,
   config = lineConfigFromEnv(),
   fetcher: typeof fetch = fetch,
 ): Promise<DeliveryReceipt> {
@@ -145,7 +153,13 @@ export async function sendLineAlert(
     },
     body: JSON.stringify({
       to: config.to,
-      messages: [formatLineFlexAlert(alert)],
+      messages: [
+        formatLineFlexAlert(
+          alert,
+          context,
+          alert.chamber_id ?? "Unassigned",
+        ),
+      ],
       notificationDisabled: false,
     }),
     signal: AbortSignal.timeout(15_000),

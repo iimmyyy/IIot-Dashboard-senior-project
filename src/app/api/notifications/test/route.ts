@@ -5,16 +5,21 @@ import {
   sendEmailAlert,
   sendLineAlert,
 } from "@/lib/notifications/providers";
+import {
+  demoExperiments,
+  demoLatest,
+} from "@/lib/mock/data";
+import { notificationContextFromTelemetry } from "@/lib/notifications/notification-context";
 import { alertSchema } from "@/types";
 
 const bodySchema = z.object({
   channel: z.enum(["email", "line"]),
 });
 
-function sampleAlert() {
+function sampleAlert(experimentId: string) {
   return alertSchema.parse({
     id: `TEST-${crypto.randomUUID()}`,
-    experiment_id: "NOTIFICATION-TEST",
+    experiment_id: experimentId,
     chamber_id: "L1",
     kind: "temperature_peak",
     title: "Temperature Peak Passed (Test)",
@@ -53,13 +58,23 @@ export async function POST(request: Request) {
   if (!parsed.success)
     return Response.json({ error: "Choose email or line." }, { status: 400 });
 
-  const alert = sampleAlert();
+  const sentAt = new Date().toISOString();
+  const experiment =
+    demoExperiments.find((candidate) => candidate.status === "running") ??
+    demoExperiments[0];
+  const frame = demoLatest("normal", "L1");
+  const context = notificationContextFromTelemetry(
+    frame,
+    experiment?.start_date ?? null,
+    sentAt,
+  );
+  const alert = sampleAlert(experiment?.id ?? "NOTIFICATION-TEST");
   const key = `${alert.id}:${parsed.data.channel}`;
   try {
     const receipt =
       parsed.data.channel === "email"
-        ? await sendEmailAlert(alert, key)
-        : await sendLineAlert(alert, key);
+        ? await sendEmailAlert(alert, key, context)
+        : await sendLineAlert(alert, key, context);
     return Response.json(
       { ok: true, receipt },
       { headers: { "Cache-Control": "no-store" } },
