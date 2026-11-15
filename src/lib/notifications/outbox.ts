@@ -1,4 +1,9 @@
 import type { NotificationJob, ResearchAlert } from "@/types";
+import {
+  formatBatchRunningTime,
+  formatCurrentTemperature,
+  type NotificationContext,
+} from "./notification-context";
 
 function escapeHtml(value: string) {
   return value.replace(
@@ -41,6 +46,7 @@ export function createAlertNotificationJobs(
 
 export function formatLineAlert(
   alert: ResearchAlert,
+  context: NotificationContext,
   chamberId = alert.chamber_id ?? "Unassigned",
 ) {
   const evidence = alert.supporting_values
@@ -52,6 +58,12 @@ export function formatLineAlert(
     alert.title,
     "",
     alert.description,
+    context
+      ? `Current temperatures: Top ${formatCurrentTemperature(context.currentTemperaturesC.top)}, Middle ${formatCurrentTemperature(context.currentTemperaturesC.middle)}, Bottom ${formatCurrentTemperature(context.currentTemperaturesC.bottom)}, Average ${formatCurrentTemperature(context.currentAverageTemperatureC)}`
+      : "",
+    context
+      ? `Batch running time: ${formatBatchRunningTime(context.batchStartedAt, context.sentAt)}`
+      : "",
     evidence,
     "",
     `Action: ${alert.action}`,
@@ -62,12 +74,44 @@ export function formatLineAlert(
 
 export function formatLineFlexAlert(
   alert: ResearchAlert,
+  context: NotificationContext,
   chamberId = alert.chamber_id ?? "Unassigned",
 ) {
   const isCritical = alert.severity === "critical";
   const accent = isCritical ? "#B42318" : "#B54708";
   const actionBackground = isCritical ? "#FEE4E2" : "#FFF3E0";
   const evidence = alert.supporting_values.slice(0, 3);
+  const currentBatchContents = [
+    ["Top temperature", formatCurrentTemperature(context.currentTemperaturesC.top)],
+    ["Middle temperature", formatCurrentTemperature(context.currentTemperaturesC.middle)],
+    ["Bottom temperature", formatCurrentTemperature(context.currentTemperaturesC.bottom)],
+    ["Average temperature", formatCurrentTemperature(context.currentAverageTemperatureC)],
+    ["Running time", formatBatchRunningTime(context.batchStartedAt, context.sentAt)],
+  ].map(([label, value]) => ({
+    type: "box" as const,
+    layout: "horizontal" as const,
+    spacing: "md" as const,
+    contents: [
+      {
+        type: "text" as const,
+        text: label,
+        color: "#667085",
+        size: "sm" as const,
+        wrap: true,
+        flex: 3,
+      },
+      {
+        type: "text" as const,
+        text: value,
+        color: "#101828",
+        size: "sm" as const,
+        weight: "bold" as const,
+        align: "end" as const,
+        wrap: true,
+        flex: 2,
+      },
+    ],
+  }));
   const evidenceContents = evidence.length
     ? evidence.map(({ label, value }) => ({
         type: "box" as const,
@@ -179,6 +223,25 @@ export function formatLineFlexAlert(
           },
           {
             type: "text" as const,
+            text: "CURRENT BATCH",
+            color: "#667085",
+            size: "xs" as const,
+            weight: "bold" as const,
+            margin: "sm" as const,
+          },
+          {
+            type: "box" as const,
+            layout: "vertical" as const,
+            spacing: "sm" as const,
+            contents: currentBatchContents,
+          },
+          {
+            type: "separator" as const,
+            color: "#EAECF0",
+            margin: "sm" as const,
+          },
+          {
+            type: "text" as const,
             text: "SUPPORTING VALUES",
             color: "#667085",
             size: "xs" as const,
@@ -239,8 +302,25 @@ export function formatLineFlexAlert(
 
 export function formatEmailAlert(
   alert: ResearchAlert,
+  context: NotificationContext,
   chamberId = alert.chamber_id ?? "Unassigned",
 ) {
+  const topTemperature = formatCurrentTemperature(
+    context.currentTemperaturesC.top,
+  );
+  const middleTemperature = formatCurrentTemperature(
+    context.currentTemperaturesC.middle,
+  );
+  const bottomTemperature = formatCurrentTemperature(
+    context.currentTemperaturesC.bottom,
+  );
+  const averageTemperature = formatCurrentTemperature(
+    context.currentAverageTemperatureC,
+  );
+  const batchRunningTime = formatBatchRunningTime(
+    context.batchStartedAt,
+    context.sentAt,
+  );
   const subject = `[BioDry Alert] ${chamberId} — ${alert.title}`;
   const evidenceText = alert.supporting_values
     .map(({ label, value }) => `- ${label}: ${value}`)
@@ -251,6 +331,12 @@ export function formatEmailAlert(
     `Machine: ${chamberId}`,
     `Severity: ${alert.severity.toUpperCase()}`,
     `Detected: ${bangkokDateTime(alert.detected_at)} ICT`,
+    `Top temperature: ${topTemperature}`,
+    `Middle temperature: ${middleTemperature}`,
+    `Bottom temperature: ${bottomTemperature}`,
+    `Average temperature: ${averageTemperature}`,
+    `Batch running time: ${batchRunningTime}`,
+    `Batch started: ${context.batchStartedAt ? `${bangkokDateTime(context.batchStartedAt)} ICT` : "Not available"}`,
     `Alert: ${alert.title}`,
     "",
     alert.description,
@@ -287,6 +373,12 @@ export function formatEmailAlert(
             <tr><td style="padding:6px 0;color:#6d7d77">Machine</td><td style="padding:6px 0;text-align:right;font-weight:700">${escapeHtml(chamberId)}</td></tr>
             <tr><td style="padding:6px 0;color:#6d7d77">Severity</td><td style="padding:6px 0;text-align:right;font-weight:700">${escapeHtml(alert.severity.toUpperCase())}</td></tr>
             <tr><td style="padding:6px 0;color:#6d7d77">Detected</td><td style="padding:6px 0;text-align:right;font-weight:700">${escapeHtml(bangkokDateTime(alert.detected_at))} ICT</td></tr>
+            <tr><td style="padding:6px 0;color:#6d7d77">Top temperature</td><td style="padding:6px 0;text-align:right;font-weight:700">${escapeHtml(topTemperature)}</td></tr>
+            <tr><td style="padding:6px 0;color:#6d7d77">Middle temperature</td><td style="padding:6px 0;text-align:right;font-weight:700">${escapeHtml(middleTemperature)}</td></tr>
+            <tr><td style="padding:6px 0;color:#6d7d77">Bottom temperature</td><td style="padding:6px 0;text-align:right;font-weight:700">${escapeHtml(bottomTemperature)}</td></tr>
+            <tr><td style="padding:6px 0;color:#6d7d77">Average temperature</td><td style="padding:6px 0;text-align:right;font-weight:700">${escapeHtml(averageTemperature)}</td></tr>
+            <tr><td style="padding:6px 0;color:#6d7d77">Batch running time</td><td style="padding:6px 0;text-align:right;font-weight:700">${escapeHtml(batchRunningTime)}</td></tr>
+            <tr><td style="padding:6px 0;color:#6d7d77">Batch started</td><td style="padding:6px 0;text-align:right;font-weight:700">${context.batchStartedAt ? `${escapeHtml(bangkokDateTime(context.batchStartedAt))} ICT` : "Not available"}</td></tr>
           </table>
           <p style="line-height:1.65;margin:22px 0">${escapeHtml(alert.description)}</p>
           <h2 style="font-size:16px;margin:22px 0 8px">Supporting values</h2>

@@ -6,12 +6,17 @@ import {
   type PDFPage,
 } from "pdf-lib";
 import type { ResearchAlert } from "@/types";
+import {
+  formatBatchRunningTime,
+  formatCurrentTemperature,
+} from "./notification-context";
 
 export type BatchReportContext = {
   batchLabel?: string;
   batchStatus?: string;
   startedAt?: string | null;
   generatedAt?: string;
+  currentAverageTemperatureC?: number | null;
 };
 
 const pageWidth = 595.28;
@@ -145,7 +150,7 @@ export async function createBatchSummaryPdf(
   });
 
   let y = pageHeight - 174;
-  const cardHeight = 116;
+  const cardHeight = 150;
   page.drawRectangle({
     x: margin,
     y: y - cardHeight,
@@ -162,6 +167,14 @@ export async function createBatchSummaryPdf(
     ["Status", context.batchStatus ?? "Temperature peak alert triggered"],
     ["Batch started", displayDateTime(context.startedAt)],
     ["Alert detected", `${displayDateTime(alert.detected_at)} ICT`],
+    [
+      "Current average",
+      formatCurrentTemperature(context.currentAverageTemperatureC ?? null),
+    ],
+    [
+      "Running time",
+      formatBatchRunningTime(context.startedAt ?? null, generatedAt),
+    ],
   ];
   metadata.forEach(([label, value], index) => {
     const column = index % 2;

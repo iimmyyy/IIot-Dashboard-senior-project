@@ -8,6 +8,13 @@ import {
 } from "./providers";
 
 describe("notification providers", () => {
+  const context = {
+    currentTemperaturesC: { top: 51.2, middle: 53.4, bottom: 49.6 },
+    currentAverageTemperatureC: 51.4,
+    batchStartedAt: "2026-11-05T17:00:00.000Z",
+    sentAt: "2026-11-15T05:00:00.000Z",
+  };
+
   it("requires server-side email configuration", () => {
     expect(() => emailConfigFromEnv({})).toThrow("ALERT_EMAIL_FROM");
   });
@@ -35,6 +42,7 @@ describe("notification providers", () => {
     const receipt = await sendEmailAlert(
       demoAlerts()[0],
       "alert-1:email",
+      context,
       {
         apiToken: "secret",
         fromEmail: "alerts@test.example",
@@ -51,6 +59,8 @@ describe("notification providers", () => {
     const payload = JSON.parse(init.body as string);
     expect(payload.to).toEqual(["lab@example.com"]);
     expect(payload.from).toBe("BioDry Alerts <alerts@test.example>");
+    expect(payload.text).toContain("Top temperature: 51.2 °C");
+    expect(payload.text).toContain("Batch running time: 9.5 days");
     expect(payload.attachments).toHaveLength(1);
     expect(payload.attachments[0]).toMatchObject({
       content_type: "application/pdf",
@@ -74,6 +84,7 @@ describe("notification providers", () => {
       sendEmailAlert(
         demoAlerts()[0],
         "alert-2:email",
+        context,
         {
           apiToken: "secret",
           fromEmail: "alerts@test.example",
@@ -97,6 +108,7 @@ describe("notification providers", () => {
     const receipt = await sendLineAlert(
       demoAlerts()[0],
       "alert-1:line",
+      context,
       { channelAccessToken: "secret", to: "U123" },
       fetcher,
     );
@@ -107,6 +119,8 @@ describe("notification providers", () => {
       altText: expect.stringContaining("BioDry Alert"),
       contents: { type: "bubble" },
     });
+    expect(JSON.stringify(payload.messages[0])).toContain("51.2 °C");
+    expect(JSON.stringify(payload.messages[0])).toContain("9.5 days");
     expect(receipt.duplicate).toBe(true);
   });
 });
